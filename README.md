@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/Supabase-ledger-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white&labelColor=0d1117" alt="Supabase">
   <img src="https://img.shields.io/badge/n8n-webhook-EA4B71?style=for-the-badge&logo=n8n&logoColor=white&labelColor=0d1117" alt="n8n">
   <img src="https://img.shields.io/badge/Telegram-approval-26A5E4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=0d1117" alt="Telegram">
+  <img src="https://img.shields.io/badge/License-MIT-94a3b8?style=for-the-badge&labelColor=0d1117" alt="MIT License">
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/LLM%20math-none-fbbf24?style=flat-square&labelColor=0d1117" alt="LLM math: none">
@@ -340,4 +341,5 @@ The contract is never sent to an AI provider. What leaves the machine is the min
   <b>System #001</b> · Built by Ron<br>
   <sub>Taught in public at <b>Ron Builds Systems</b>. Installed privately for business owners by <b>Physis Advisory</b>.</sub><br><br>
   <sub><i>Tools don't pay you. Systems do.</i></sub>
+  <br><sub>Released under the <a href="LICENSE">MIT License</a>.</sub>
 </p>
