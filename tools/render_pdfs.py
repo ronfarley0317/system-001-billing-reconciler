@@ -2,8 +2,11 @@
 
     python tools/render_pdfs.py                  # render anything new or changed, then exit
     python tools/render_pdfs.py --watch          # keep running and render files as they land
-    python tools/render_pdfs.py --install-agent  # macOS: start the watcher automatically at login
+    python tools/render_pdfs.py --install-agent  # start the watcher automatically at login (macOS / Windows)
     python tools/render_pdfs.py --uninstall-agent
+
+On Windows use .venv\\Scripts\\python instead of python. PDFs are printed with Chrome, or with
+Microsoft Edge, which every Windows PC has.
 
 Watched folders default to client_inbox/ and demo_data/ (override with --dir, repeatable).
 Output goes to a rendered/ folder inside each watched folder. A file is re-rendered only when
@@ -48,13 +51,26 @@ MAX_INVOICE_PAGES = 60
 AGENT_LABEL = "com.physis.system001.render-pdfs"
 AGENT_PLIST = Path.home() / "Library" / "LaunchAgents" / f"{AGENT_LABEL}.plist"
 AGENT_LOG = ROOT / "logs" / "render_pdfs.log"
+AGENT_PID = ROOT / "logs" / "render_pdfs.pid"
+IS_WINDOWS = os.name == "nt"
+IS_MAC = sys.platform == "darwin"
+WIN_STARTUP = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+WIN_LAUNCHER = WIN_STARTUP / "System001 Render PDFs.cmd"
 
-CHROME_CANDIDATES = (
+MAC_BROWSERS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
     "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
     "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
 )
+WIN_BROWSERS = (
+    ("PROGRAMFILES", r"Google\Chrome\Application\chrome.exe"),
+    ("PROGRAMFILES(X86)", r"Google\Chrome\Application\chrome.exe"),
+    ("LOCALAPPDATA", r"Google\Chrome\Application\chrome.exe"),
+    ("PROGRAMFILES(X86)", r"Microsoft\Edge\Application\msedge.exe"),
+    ("PROGRAMFILES", r"Microsoft\Edge\Application\msedge.exe"),
+)
+PATH_BROWSERS = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "msedge", "chrome")
 
 REQUIRED_COLUMNS = {"invoice_id", "invoice_date", "customer_name", "quantity", "unit_price", "amount_billed"}
 DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%m/%d/%y")
@@ -487,10 +503,13 @@ def invoices_document(path: Path, contracts: list[Contract]) -> tuple[str, str]:
 # --------------------------------------------------------------------------- rendering + watching
 
 def find_chrome() -> str | None:
-    for c in CHROME_CANDIDATES:
-        if Path(c).exists():
-            return c
-    return shutil.which("google-chrome") or shutil.which("chromium")
+    candidates: list[Path] = [Path(c) for c in MAC_BROWSERS] if IS_MAC else []
+    if IS_WINDOWS:
+        candidates += [Path(os.environ[var]) / rel for var, rel in WIN_BROWSERS if os.environ.get(var)]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    return next((found for name in PATH_BROWSERS if (found := shutil.which(name))), None)
 
 
 def to_pdf(chrome: str, src: Path, dest: Path) -> None:
@@ -498,11 +517,18 @@ def to_pdf(chrome: str, src: Path, dest: Path) -> None:
         [chrome, "--headless=new", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
          f"--print-to-pdf={dest}", src.as_uri()],
         check=True, capture_output=True, timeout=180,
+        creationflags=subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0,
     )
 
 
 def _log(msg: str) -> None:
     console.print(f"[dim]{datetime.now():%H:%M:%S}[/] {msg}")
+
+
+def _log_to_file(path: Path) -> None:
+    global console
+    path.parent.mkdir(parents=True, exist_ok=True)
+    console = Console(file=path.open("a", encoding="utf-8", buffering=1), width=120, no_color=True)
 
 
 def _digest(path: Path) -> str:
@@ -566,6 +592,8 @@ def scan(folder: Path, chrome: str | None, *, settle: bool, force: bool = False)
 
 def watch(folders: list[Path], chrome: str | None) -> None:
     _log(f"Watching {', '.join(str(f) for f in folders)} [dim](every {POLL_SECONDS}s, Ctrl+C to stop)[/]")
+    if not chrome:
+        _log("[yellow]No Chrome or Edge found: HTML only. Open a file in a browser and print it to PDF.[/]")
     while True:
         for f in folders:
             try:
@@ -575,16 +603,21 @@ def watch(folders: list[Path], chrome: str | None) -> None:
         time.sleep(POLL_SECONDS)
 
 
-def install_agent(folders: list[Path]) -> None:
-    AGENT_LOG.parent.mkdir(parents=True, exist_ok=True)
-    AGENT_PLIST.parent.mkdir(parents=True, exist_ok=True)
-    args = [sys.executable, str(Path(__file__).resolve()), "--watch"]
+def _watch_args(python: str, folders: list[Path], log: bool) -> list[str]:
+    args = [python, str(Path(__file__).resolve()), "--watch"]
+    if log:
+        args += ["--log", str(AGENT_LOG)]
     for f in folders:
         args += ["--dir", str(f.resolve())]
+    return args
+
+
+def _install_mac(folders: list[Path]) -> None:
+    AGENT_PLIST.parent.mkdir(parents=True, exist_ok=True)
     with AGENT_PLIST.open("wb") as fh:
         plistlib.dump({
             "Label": AGENT_LABEL,
-            "ProgramArguments": args,
+            "ProgramArguments": _watch_args(sys.executable, folders, log=False),
             "WorkingDirectory": str(ROOT),
             "RunAtLoad": True,
             "KeepAlive": True,
@@ -595,13 +628,59 @@ def install_agent(folders: list[Path]) -> None:
     domain = f"gui/{os.getuid()}"
     subprocess.run(["launchctl", "bootout", domain, str(AGENT_PLIST)], capture_output=True)
     subprocess.run(["launchctl", "bootstrap", domain, str(AGENT_PLIST)], check=True)
-    _log(f"[green]✔[/] Background watcher installed ({AGENT_LABEL}). Log: {AGENT_LOG}")
+
+
+def _windows_launcher(folders: list[Path]) -> str:
+    """Startup-folder .cmd: needs no admin rights, and pythonw keeps the watcher windowless."""
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    exe = str(pythonw if pythonw.exists() else Path(sys.executable))
+    args = " ".join(f'"{a}"' for a in _watch_args(exe, folders, log=True))
+    return ("@echo off\r\n"
+            "rem System #001 PDF watcher. Remove with: .venv\\Scripts\\python tools\\render_pdfs.py --uninstall-agent\r\n"
+            f'cd /d "{ROOT}"\r\n'
+            f'start "" {args}\r\n')
+
+
+def _stop_windows_watcher() -> None:
+    try:
+        pid = int(AGENT_PID.read_text().strip())
+    except (OSError, ValueError):
+        return
+    # Only kill the PID if it is still a Python process: Windows recycles PIDs.
+    found = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                           capture_output=True, text=True).stdout.lower()
+    if "python" in found:
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+    AGENT_PID.unlink(missing_ok=True)
+
+
+def _install_windows(folders: list[Path]) -> None:
+    if not WIN_STARTUP.is_dir():
+        raise SystemExit(f"Windows Startup folder not found: {WIN_STARTUP}")
+    _stop_windows_watcher()
+    WIN_LAUNCHER.write_text(_windows_launcher(folders), encoding="utf-8")
+    subprocess.run(["cmd", "/c", str(WIN_LAUNCHER)], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+
+
+def install_agent(folders: list[Path]) -> None:
+    AGENT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    if IS_MAC:
+        _install_mac(folders)
+    elif IS_WINDOWS:
+        _install_windows(folders)
+    else:
+        raise SystemExit("Start-at-login is set up for macOS and Windows only. Run --watch instead.")
+    _log(f"[green]✔[/] Background watcher installed and running. Log: {AGENT_LOG}")
 
 
 def uninstall_agent() -> None:
-    subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", str(AGENT_PLIST)], capture_output=True)
-    AGENT_PLIST.unlink(missing_ok=True)
-    _log(f"[green]✔[/] Background watcher removed ({AGENT_LABEL}).")
+    if IS_MAC:
+        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", str(AGENT_PLIST)], capture_output=True)
+        AGENT_PLIST.unlink(missing_ok=True)
+    elif IS_WINDOWS:
+        _stop_windows_watcher()
+        WIN_LAUNCHER.unlink(missing_ok=True)
+    _log("[green]✔[/] Background watcher stopped and removed.")
 
 
 def main() -> int:
@@ -609,9 +688,12 @@ def main() -> int:
     ap.add_argument("--dir", action="append", type=Path, help="folder to process (repeatable)")
     ap.add_argument("--watch", action="store_true", help="keep running and render new or changed files")
     ap.add_argument("--force", action="store_true", help="re-render everything, even unchanged files")
-    ap.add_argument("--install-agent", action="store_true", help="macOS: run the watcher automatically at login")
-    ap.add_argument("--uninstall-agent", action="store_true", help="macOS: remove the login watcher")
+    ap.add_argument("--install-agent", action="store_true", help="run the watcher automatically at login")
+    ap.add_argument("--uninstall-agent", action="store_true", help="stop and remove the login watcher")
+    ap.add_argument("--log", type=Path, help="write output to this file instead of the terminal")
     args = ap.parse_args()
+    if args.log:
+        _log_to_file(args.log)
     folders = [d.resolve() for d in args.dir] if args.dir else list(DEFAULT_DIRS)
     for f in folders:
         f.mkdir(parents=True, exist_ok=True)
@@ -625,6 +707,9 @@ def main() -> int:
 
     chrome = find_chrome()
     if args.watch:
+        if args.log:
+            AGENT_PID.parent.mkdir(parents=True, exist_ok=True)
+            AGENT_PID.write_text(str(os.getpid()))
         try:
             watch(folders, chrome)
         except KeyboardInterrupt:
