@@ -280,6 +280,22 @@ python run_demo.py --no-telegram   # everything except the Telegram message
 python generate_demo_data.py       # rebuild the demo contract and ERP export
 ```
 
+### 7. Run on your own data
+
+Each run takes one contract and one invoice export for one customer.
+
+```bash
+python run_demo.py --client companyx                                        # reads clients/companyx/
+python run_demo.py --contract path/to/contract.md --invoices path/to/export.csv
+```
+
+With `--client`, put two files in `clients/<name>/`: `contract.md` (or `contract.txt`) and `invoices.csv`. The `clients/` folder is git-ignored, so client data is never committed.
+
+| Input | Requirements |
+|---|---|
+| Contract | Plain text or Markdown. Convert a PDF to text first (`pdftotext`, or OCR for a scan). Citations are verified word for word against this file. |
+| Invoice CSV | Columns `invoice_id`, `invoice_date` (`YYYY-MM-DD`), `quantity`, `unit_price`, `amount_billed` (plain numbers, no `$` or commas). `customer_name` is optional. |
+
 > [!TIP]
 > Before each recording take or demo, reset the rows to `PENDING_APPROVAL`. The approve step only updates pending rows.
 
@@ -331,7 +347,7 @@ The contract is never sent to an AI provider. What leaves the machine is the min
 ## Scope
 
 - **Six pricing terms are extracted:** base rate, promo rate, promo expiry, annual escalator, escalator start date and monthly minimum. Other clause types need a field in `schemas/payloads.py` and a rule in `agents/analyst.py`.
-- **One contract and one ERP export per run.** Paths are set at the top of `run_demo.py`.
+- **One contract and one ERP export per run.** Pass them with `--client` or `--contract`/`--invoices`; with neither, the demo data runs.
 - **The Scout reads contract text.** The demo contract is Markdown; a scanned PDF needs text extraction first.
 - **All numbers in this README come from the synthetic benchmark dataset.**
 

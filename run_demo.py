@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from datetime import datetime
@@ -36,8 +37,47 @@ from tools.db_client import log_leak  # noqa: E402
 from tools.dossier import invoice_description  # noqa: E402
 from tools.notifier import send_hitl_dossier  # noqa: E402
 
-CONTRACT = ROOT / "demo_data" / "apex_contract_2025.md"
-ERP_CSV = ROOT / "demo_data" / "erp_invoices_export.csv"
+DEMO_CONTRACT = ROOT / "demo_data" / "apex_contract_2025.md"
+DEMO_ERP_CSV = ROOT / "demo_data" / "erp_invoices_export.csv"
+CLIENTS_DIR = ROOT / "clients"
+CONTRACT_SUFFIXES = (".md", ".txt")
+
+CONTRACT = DEMO_CONTRACT
+ERP_CSV = DEMO_ERP_CSV
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Reconcile one contract against one invoice export. With no inputs, runs the demo data.",
+    )
+    parser.add_argument("--client", help=f"folder name under {CLIENTS_DIR.name}/ holding contract.md (or .txt) and invoices.csv")
+    parser.add_argument("--contract", type=Path, help="path to the contract as text or Markdown")
+    parser.add_argument("--invoices", type=Path, help="path to the invoice export CSV")
+    parser.add_argument("--no-telegram", action="store_true", help="skip the Telegram approval card")
+    args = parser.parse_args()
+    if args.client and (args.contract or args.invoices):
+        parser.error("use --client on its own, or --contract with --invoices")
+    if bool(args.contract) != bool(args.invoices):
+        parser.error("--contract and --invoices must be given together")
+    return args
+
+
+def resolve_inputs(args: argparse.Namespace) -> tuple[Path, Path] | None:
+    if args.client:
+        folder = CLIENTS_DIR / args.client
+        contract = next((folder / f"contract{s}" for s in CONTRACT_SUFFIXES if (folder / f"contract{s}").exists()),
+                        folder / "contract.md")
+        return contract, folder / "invoices.csv"
+    if args.contract:
+        return args.contract.resolve(), args.invoices.resolve()
+    return None
 
 
 def contract_id(path: Path) -> str:
@@ -117,7 +157,7 @@ def render_extraction(result: ScoutResult) -> None:
         Panel(
             Group(table, Text(""), footer),
             title="[bold]① SCOUT[/]  [grey62]Qwen contract extraction: language only, no arithmetic[/]",
-            subtitle=f"[grey50]{CONTRACT.relative_to(ROOT)}[/]",
+            subtitle=f"[grey50]{display_path(CONTRACT)}[/]",
             border_style="cyan",
             padding=(1, 2),
         )
@@ -201,7 +241,7 @@ def render_audit(report: AuditReport) -> None:
         Panel(
             Group(table, Text(""), legend),
             title="[bold]② ANALYST[/]  [grey62]Line-by-line reconciliation: pure Decimal, ROUND_HALF_UP to the cent[/]",
-            subtitle=f"[grey50]{ERP_CSV.relative_to(ROOT)}[/]",
+            subtitle=f"[grey50]{display_path(ERP_CSV)}[/]",
             border_style="yellow",
             padding=(1, 1),
         )
@@ -336,11 +376,32 @@ def write_ledger(report: AuditReport, scout: ScoutResult) -> bool:
 
 
 def main() -> int:
-    if not CONTRACT.exists() or not ERP_CSV.exists():
-        console.print("[yellow]Demo data missing. Generating…[/]")
-        import generate_demo_data
+    global CONTRACT, ERP_CSV
+    args = parse_args()
+    inputs = resolve_inputs(args)
 
-        generate_demo_data.main()
+    if inputs is None:
+        if not CONTRACT.exists() or not ERP_CSV.exists():
+            console.print("[yellow]Demo data missing. Generating…[/]")
+            import generate_demo_data
+
+            generate_demo_data.main()
+    else:
+        CONTRACT, ERP_CSV = inputs
+        missing = [p for p in (CONTRACT, ERP_CSV) if not p.exists()]
+        if missing:
+            console.print(Panel(
+                "[bold red]Input file not found:[/]\n" + "\n".join(f"  {display_path(p)}" for p in missing),
+                border_style="red",
+            ))
+            return 1
+        if CONTRACT.suffix.lower() == ".pdf":
+            console.print(Panel(
+                "[bold red]The contract must be text or Markdown, not PDF.[/]\n"
+                "[grey70]Extract the text first (e.g. pdftotext), then pass the .txt or .md file.[/]",
+                border_style="red",
+            ))
+            return 1
 
     render_header()
 
@@ -374,7 +435,7 @@ def main() -> int:
     console.print(Rule(style="grey23"))
     render_hitl(report, scout)
 
-    if "--no-telegram" not in sys.argv:
+    if not args.no_telegram:
         with console.status("[red]Dispatching HITL card to Telegram…[/]", spinner="dots"):
             send_hitl_dossier(report, scout, contract_id(CONTRACT))
     return 0

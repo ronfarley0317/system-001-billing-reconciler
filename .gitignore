@@ -3,6 +3,7 @@
 __pycache__/
 reports/
 client_inbox/
+clients/
 logs/
 .DS_Store
 .render_state.json
