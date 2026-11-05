@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+reports/
+client_inbox/
+logs/
+.DS_Store
+.render_state.json

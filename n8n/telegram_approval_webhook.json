@@ -1,0 +1,466 @@
+{
+  "name": "Telegram Approval Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "a1f3c2d4-1111-4a7e-9b01-000000000001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "b7e2a9c1-5d4f-4e3a-8c21-telegramapprove",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a1f3c2d4-5555-4a7e-9b01-000000000005-c",
+              "leftValue": "={{ $json.callback_query.data }}",
+              "rightValue": "approve_claim",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f3c2d4-5555-4a7e-9b01-000000000005",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a1f3c2d4-6666-4a7e-9b01-000000000006-c",
+              "leftValue": "={{ $json.callback_query.data }}",
+              "rightValue": "deny_claim",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f3c2d4-6666-4a7e-9b01-000000000006",
+      "name": "Denied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "tableId": "detected_leaks",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "PENDING_APPROVAL"
+            },
+            {
+              "keyName": "client_name",
+              "condition": "eq",
+              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "APPROVED"
+            }
+          ]
+        }
+      },
+      "id": "a1f3c2d4-2222-4a7e-9b01-000000000002",
+      "name": "Approve Pending Leaks",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "tableId": "detected_leaks",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "PENDING_APPROVAL"
+            },
+            {
+              "keyName": "client_name",
+              "condition": "eq",
+              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "DENIED"
+            }
+          ]
+        }
+      },
+      "id": "a1f3c2d4-7777-4a7e-9b01-000000000007",
+      "name": "Deny Pending Leaks",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        660,
+        240
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Telegram Trigger').item.json.callback_query.id }}",
+        "additionalFields": {
+          "text": "Ledger approved."
+        }
+      },
+      "id": "a1f3c2d4-3333-4a7e-9b01-000000000003",
+      "name": "Answer Approve",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Telegram Trigger').item.json.callback_query.id }}",
+        "additionalFields": {
+          "text": "Claim denied."
+        }
+      },
+      "id": "a1f3c2d4-8888-4a7e-9b01-000000000008",
+      "name": "Answer Deny",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        240
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
+        "text": "=✅ Approved. All pending arrears for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} are now APPROVED in the ledger. Finance has been emailed to issue the invoices.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f3c2d4-4444-4a7e-9b01-000000000004",
+      "name": "Send Approval Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
+        "text": "=❌ Denied. Pending arrears for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} are marked DENIED. Nothing will be billed.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f3c2d4-9999-4a7e-9b01-000000000009",
+      "name": "Send Denial Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        240
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_FINANCE_EMAIL",
+        "subject": "=APPROVED: Issue catch-up invoices for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} ({{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Arrears Found:\\s*(\\S+)/)[1] }})",
+        "emailType": "text",
+        "message": "=Finance team,\n\nThe billing reconciliation for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} (contract {{ ($('Telegram Trigger').item.json.callback_query.message.text.match(/Contract:\\s*(.+)/) || [])[1] || 'n/a' }}) has been reviewed and approved.\n\nPlease issue catch-up invoices for the following under-billed periods:\n\n{{ $('Get Approved Leaks').all().map(i => i.json.invoice_number + ': $' + Number(i.json.calculated_arrears).toLocaleString('en-US', { minimumFractionDigits: 2 })).sort().join('\\n') }}\n\nTotal approved arrears: {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Arrears Found:\\s*(\\S+)/)[1] }}\n\nWhy these were under-billed:\n{{ ($('Telegram Trigger').item.json.callback_query.message.text.match(/Why:\\n([\\s\\S]*?)\\n\\nContract citations/) || [])[1] || '' }}\n\nEach amount is tied to a verified clause in the signed contract and is recorded in the detected_leaks ledger with status APPROVED. The line-by-line audit report was attached to the approval card.\n\nApproved by: {{ $('Telegram Trigger').item.json.callback_query.from.first_name }}{{ $('Telegram Trigger').item.json.callback_query.from.username ? ' (@' + $('Telegram Trigger').item.json.callback_query.from.username + ')' : '' }}\nApproved at: {{ $now.toFormat('MMMM d, yyyy h:mm a ZZZZ') }}\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f3c2d4-aaaa-4a7e-9b01-00000000000a",
+      "name": "Email Finance",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "detected_leaks",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_name",
+              "condition": "eq",
+              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "APPROVED"
+            }
+          ]
+        }
+      },
+      "id": "a1f3c2d4-bbbb-4a7e-9b01-00000000000b",
+      "name": "Get Approved Leaks",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Approve Pending Leaks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Denied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Denied?": {
+      "main": [
+        [
+          {
+            "node": "Deny Pending Leaks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Approve Pending Leaks": {
+      "main": [
+        [
+          {
+            "node": "Get Approved Leaks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Approve": {
+      "main": [
+        [
+          {
+            "node": "Email Finance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deny Pending Leaks": {
+      "main": [
+        [
+          {
+            "node": "Answer Deny",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Deny": {
+      "main": [
+        [
+          {
+            "node": "Send Denial Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Finance": {
+      "main": [
+        [
+          {
+            "node": "Send Approval Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approved Leaks": {
+      "main": [
+        [
+          {
+            "node": "Answer Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

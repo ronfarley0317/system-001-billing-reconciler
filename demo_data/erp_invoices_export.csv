@@ -1,0 +1,13 @@
+invoice_id,invoice_date,customer_id,customer_name,sku,description,quantity,unit_price,amount_billed,currency,status
+INV-202506-1001,2025-06-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Jun 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202507-1002,2025-07-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Jul 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202508-1003,2025-08-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Aug 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202509-1004,2025-09-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Sep 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202510-1005,2025-10-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Oct 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202511-1006,2025-11-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Nov 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202512-1007,2025-12-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Dec 2025 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202601-1008,2026-01-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Jan 2026 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202602-1009,2026-02-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Feb 2026 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202603-1010,2026-03-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Mar 2026 - 60 seats,60,200.00,12000.00,USD,PAID
+INV-202604-1011,2026-04-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - Apr 2026 - 40 seats,40,200.00,8000.00,USD,PAID
+INV-202605-1012,2026-05-01,CUST-APEX-0042,"Apex Logistics Group, LLC",MRD-FLEET-SEAT,Fleet Telematics - May 2026 - 40 seats,40,200.00,8000.00,USD,PAID

@@ -1,0 +1,277 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Apex Logistics Group, LLC Invoices</title><style>
+  @page { size: Letter; margin: 0 }
+  * { box-sizing: border-box }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  body { margin: 0; background: #e9ecf1; color: #111827;
+         font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif }
+  .page { width: 8.5in; min-height: 11in; margin: 24px auto; padding: 0.7in 0.75in 0.9in;
+          background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.08); position: relative }
+  @media print { body { background: #fff }
+                 .page { margin: 0; box-shadow: none; page-break-after: always; height: 11in; overflow: hidden }
+                 .page:last-child { page-break-after: auto } .page.flow { height: auto; overflow: visible } }
+  @media screen and (max-width: 8.6in) { .page { width: auto; min-height: 0; margin: 12px; padding: 24px 16px 56px } }
+  .muted { color: #6b7280 }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap }
+  table { border-collapse: collapse; width: 100% }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #6b7280;
+       text-align: left; padding: 8px 8px; border-bottom: 1.5px solid #111827 }
+  td { padding: 8px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top }
+  code { font: 11px ui-monospace, Menlo, monospace }
+  .brand { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+           border-bottom: 3px solid #0f2a4a; padding-bottom: 14px; margin-bottom: 24px }
+  .brand .name { font-size: 15px; font-weight: 700; color: #0f2a4a; letter-spacing: .01em }
+  .brand .doc { font-size: 22px; font-weight: 700; letter-spacing: .12em; color: #0f2a4a }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px;
+          font-weight: 700; letter-spacing: .06em }
+  .pill.paid { background: #d1fae5; color: #065f46 }
+  .pill.open { background: #fef3c7; color: #92400e }
+  .warn { background: #fef3c7; color: #92400e; border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; font-size: 12px }
+  footer.foot { position: absolute; left: 0.75in; right: 0.75in; bottom: 0.45in;
+                font-size: 10px; color: #9ca3af; display: flex; justify-content: space-between; gap: 16px }
+  @media screen and (max-width: 8.6in) { footer.foot { left: 16px; right: 16px; bottom: 16px } }
+
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: #6b7280; margin: 26px 0 10px }
+  .tiles { display: grid; grid-template-columns: .7fr 1.2fr 1.5fr 1fr; gap: 10px }
+  @media screen and (max-width: 8.6in) { .tiles { grid-template-columns: repeat(2, 1fr) } }
+  .tile { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; background: #f9fafb }
+  .tile .k { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #6b7280 }
+  .tile .v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f2a4a }
+  .tile .v.sm { font-size: 14px; padding-top: 4px; white-space: nowrap }
+  .note { font-size: 11px; margin: 4px 0 0 }
+  tbody tr:nth-child(even) td { background: #fafbfc }
+  table.ledger td { padding: 6px 8px }
+  tr.total td { font-weight: 700; border-top: 1.5px solid #111827; border-bottom: none; background: #fff }
+  .meta { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 30px }
+  .meta .k { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #6b7280; margin-bottom: 4px }
+  .meta dl { display: grid; grid-template-columns: auto auto; gap: 3px 16px; margin: 0 }
+  .meta dt { color: #6b7280 } .meta dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums }
+  table.sum { width: 46%; margin: 18px 0 0 auto }
+  table.sum td { border-bottom: 1px solid #e5e7eb }
+  table.sum tr.grand td { font-size: 15px; font-weight: 700; color: #0f2a4a; border-top: 1.5px solid #111827; border-bottom: none }
+  .scroll { overflow-x: auto }
+  table.raw { font-size: 11px } table.raw td, table.raw th { padding: 5px 6px; white-space: nowrap }
+</style></head><body>
+<div class="page flow">
+  <div class="brand"><div><div class="name">Invoice Ledger</div><div class="muted">Apex Logistics Group, LLC · CUST-APEX-0042</div></div>
+    <div class="doc">LEDGER</div></div>
+  <div class="tiles">
+    <div class="tile"><div class="k">Invoices</div><div class="v">12</div></div>
+    <div class="tile"><div class="k">Total billed</div><div class="v">$136,000.00</div></div>
+    <div class="tile"><div class="k">Period</div><div class="v sm">Jun 2025 – May 2026</div></div>
+    <div class="tile"><div class="k">Status</div><div class="v sm">12 of 12 paid</div></div>
+  </div>
+  <h2>Amount billed per month</h2><svg viewBox="0 0 700 135" width="100%" role="img" aria-label="Amount billed per month"><line x1="0" y1="113" x2="700" y2="113" stroke="#d1d5db"/><rect x="11.1" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="29.2" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="29.2" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Jun 25</text><rect x="69.4" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="87.5" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="87.5" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Jul 25</text><rect x="127.8" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="145.8" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="145.8" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Aug 25</text><rect x="186.1" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="204.2" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="204.2" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Sep 25</text><rect x="244.4" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="262.5" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="262.5" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Oct 25</text><rect x="302.7" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="320.8" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="320.8" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Nov 25</text><rect x="361.1" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="379.2" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="379.2" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Dec 25</text><rect x="419.4" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="437.5" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="437.5" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Jan 26</text><rect x="477.7" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="495.8" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="495.8" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Feb 26</text><rect x="536.1" y="18.0" width="36.2" height="95.0" rx="2" fill="#1f4e8c"/><text x="554.2" y="13.0" text-anchor="middle" font-size="9" fill="#374151">12k</text><text x="554.2" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Mar 26</text><rect x="594.4" y="49.7" width="36.2" height="63.3" rx="2" fill="#1f4e8c"/><text x="612.5" y="44.7" text-anchor="middle" font-size="9" fill="#374151">8k</text><text x="612.5" y="129" text-anchor="middle" font-size="9" fill="#6b7280">Apr 26</text><rect x="652.7" y="49.7" width="36.2" height="63.3" rx="2" fill="#1f4e8c"/><text x="670.8" y="44.7" text-anchor="middle" font-size="9" fill="#374151">8k</text><text x="670.8" y="129" text-anchor="middle" font-size="9" fill="#6b7280">May 26</text></svg>
+  <p class="muted note">Unit prices as uploaded: $200.00.</p>
+  
+  <h2>All invoices</h2>
+  <table class="ledger"><thead><tr><th>Invoice</th><th>Date</th><th>SKU</th><th class="num">Qty</th>
+    <th class="num">Unit price</th><th class="num">Amount</th><th>Status</th></tr></thead>
+  <tbody><tr><td>INV-202506-1001</td><td>Jun 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202507-1002</td><td>Jul 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202508-1003</td><td>Aug 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202509-1004</td><td>Sep 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202510-1005</td><td>Oct 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202511-1006</td><td>Nov 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202512-1007</td><td>Dec 01, 2025</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202601-1008</td><td>Jan 01, 2026</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202602-1009</td><td>Feb 01, 2026</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202603-1010</td><td>Mar 01, 2026</td><td>MRD-FLEET-SEAT</td><td class='num'>60</td><td class='num'>$200.00</td><td class='num'>$12,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202604-1011</td><td>Apr 01, 2026</td><td>MRD-FLEET-SEAT</td><td class='num'>40</td><td class='num'>$200.00</td><td class='num'>$8,000.00</td><td><span class="pill paid">PAID</span></td></tr><tr><td>INV-202605-1012</td><td>May 01, 2026</td><td>MRD-FLEET-SEAT</td><td class='num'>40</td><td class='num'>$200.00</td><td class='num'>$8,000.00</td><td><span class="pill paid">PAID</span></td></tr></tbody>
+  <tr class="total"><td colspan="5">Total</td><td class="num">$136,000.00</td><td></td></tr></table>
+  <footer class="foot"><span>Source: erp_invoices_export.csv · MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202506-1001</dd>
+        <dt>Invoice date</dt><dd>June 1, 2025</dd><dt>Due date</dt><dd>July 1, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Jun 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202506-1001 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202507-1002</dd>
+        <dt>Invoice date</dt><dd>July 1, 2025</dd><dt>Due date</dt><dd>July 31, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Jul 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202507-1002 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202508-1003</dd>
+        <dt>Invoice date</dt><dd>August 1, 2025</dd><dt>Due date</dt><dd>August 31, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Aug 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202508-1003 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202509-1004</dd>
+        <dt>Invoice date</dt><dd>September 1, 2025</dd><dt>Due date</dt><dd>October 1, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Sep 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202509-1004 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202510-1005</dd>
+        <dt>Invoice date</dt><dd>October 1, 2025</dd><dt>Due date</dt><dd>October 31, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Oct 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202510-1005 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202511-1006</dd>
+        <dt>Invoice date</dt><dd>November 1, 2025</dd><dt>Due date</dt><dd>December 1, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Nov 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202511-1006 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202512-1007</dd>
+        <dt>Invoice date</dt><dd>December 1, 2025</dd><dt>Due date</dt><dd>December 31, 2025</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Dec 2025 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202512-1007 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202601-1008</dd>
+        <dt>Invoice date</dt><dd>January 1, 2026</dd><dt>Due date</dt><dd>January 31, 2026</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Jan 2026 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202601-1008 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202602-1009</dd>
+        <dt>Invoice date</dt><dd>February 1, 2026</dd><dt>Due date</dt><dd>March 3, 2026</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Feb 2026 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202602-1009 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202603-1010</dd>
+        <dt>Invoice date</dt><dd>March 1, 2026</dd><dt>Due date</dt><dd>March 31, 2026</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Mar 2026 - 60 seats</td><td class="num">60</td>
+        <td class="num">$200.00</td><td class="num">$12,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$12,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$12,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202603-1010 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202604-1011</dd>
+        <dt>Invoice date</dt><dd>April 1, 2026</dd><dt>Due date</dt><dd>May 1, 2026</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - Apr 2026 - 40 seats</td><td class="num">40</td>
+        <td class="num">$200.00</td><td class="num">$8,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$8,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$8,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202604-1011 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+<div class="page">
+  <div class="brand"><div><div class="name">Meridian Fleet Systems, Inc.</div><div class="muted">Order Form MS-OF-2025-0117</div></div>
+    <div style="text-align:right"><div class="doc">INVOICE</div><div style="margin-top:6px"><span class="pill paid">PAID</span></div></div></div>
+  <div class="meta">
+    <div><div class="k">Bill to</div><b>Apex Logistics Group, LLC</b>
+      <br><span class="muted">Account CUST-APEX-0042</span></div>
+    <dl><dt>Invoice no.</dt><dd>INV-202605-1012</dd>
+        <dt>Invoice date</dt><dd>May 1, 2026</dd><dt>Due date</dt><dd>May 31, 2026</dd><dt>Terms</dt><dd>Net 30</dd>
+        <dt>Currency</dt><dd>USD</dd></dl>
+  </div>
+  <table><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+    <tr><td><code>MRD-FLEET-SEAT</code></td><td>Fleet Telematics - May 2026 - 40 seats</td><td class="num">40</td>
+        <td class="num">$200.00</td><td class="num">$8,000.00</td></tr></table>
+  <table class="sum"><tr><td>Subtotal</td><td class="num">$8,000.00</td></tr>
+    <tr class="grand"><td>Total (USD)</td><td class="num">$8,000.00</td></tr></table>
+  <footer class="foot"><span>INV-202605-1012 · Order Form MS-OF-2025-0117</span><span>Rendered Nov 05, 2026</span></footer>
+</div>
+</body></html>
