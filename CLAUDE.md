@@ -11,6 +11,7 @@ This system is designed for high-ticket B2B forensic audits. Client contract dat
 LLMs are strictly confined to language extraction (parsing unstructured PDFs into Pydantic schemas). 
 * LLMs must NEVER calculate financial drift, escalators, or arrears.
 * All financial math must be executed in pure Python using the `Decimal` module. Never use standard `float`.
+* The intake (`tools/ingest.py`) may ask the local model to name spreadsheet columns it cannot match. The model returns column names only; every value is parsed and every derived number is computed in Python.
 
 ## 3. State Management
 * The system of record is a Supabase table named `detected_leaks`.

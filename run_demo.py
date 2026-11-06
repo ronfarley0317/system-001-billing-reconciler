@@ -30,17 +30,18 @@ sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
 from agents.analyst import (  # noqa: E402
-    LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, AuditReport, LineAudit, reconcile,
+    LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, AuditReport, LineAudit, reconcile_rows,
 )
 from agents.scout import ScoutResult, extract_terms  # noqa: E402
 from tools.db_client import log_leak  # noqa: E402
 from tools.dossier import invoice_description  # noqa: E402
 from tools.notifier import send_hitl_dossier  # noqa: E402
+from tools.documents import CONTRACT_SUFFIXES, DocumentError, read_document  # noqa: E402
+from tools.ingest import SPREADSHEET_SUFFIXES, IntakeError, IntakeResult, load_invoices, mapping_path  # noqa: E402
 
 DEMO_CONTRACT = ROOT / "demo_data" / "apex_contract_2025.md"
 DEMO_ERP_CSV = ROOT / "demo_data" / "erp_invoices_export.csv"
 CLIENTS_DIR = ROOT / "clients"
-CONTRACT_SUFFIXES = (".md", ".txt")
 
 CONTRACT = DEMO_CONTRACT
 ERP_CSV = DEMO_ERP_CSV
@@ -57,9 +58,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Reconcile one contract against one invoice export. With no inputs, runs the demo data.",
     )
-    parser.add_argument("--client", help=f"folder name under {CLIENTS_DIR.name}/ holding contract.md (or .txt) and invoices.csv")
-    parser.add_argument("--contract", type=Path, help="path to the contract as text or Markdown")
-    parser.add_argument("--invoices", type=Path, help="path to the invoice export CSV")
+    parser.add_argument("--client", help=f"folder name under {CLIENTS_DIR.name}/ holding the contract and the invoice export")
+    parser.add_argument("--contract", type=Path, help="path to the contract (PDF, Word .docx, text or Markdown)")
+    parser.add_argument("--invoices", type=Path, help="path to the invoice export (CSV or Excel .xlsx)")
     parser.add_argument("--no-telegram", action="store_true", help="skip the Telegram approval card")
     args = parser.parse_args()
     if args.client and (args.contract or args.invoices):
@@ -69,20 +70,68 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+class InputError(ValueError):
+    """Missing or ambiguous input files, explained for the person running the tool."""
+
+
+def _pick_file(folder: Path, suffixes: tuple[str, ...], hint: str, kind: str) -> Path:
+    files = sorted(p for p in folder.iterdir()
+                   if p.is_file() and p.suffix.lower() in suffixes and not p.name.startswith((".", "~$")))
+    named = [p for p in files if hint in p.stem.lower()]
+    if len(named) == 1 or len(files) == 1:
+        return (named or files)[0]
+    if not files:
+        raise InputError(f"No {kind} found in {display_path(folder)}/. Add one ({', '.join(suffixes)}).")
+    raise InputError(f"{display_path(folder)}/ has {len(files)} files that could be the {kind}: "
+                     + ", ".join(p.name for p in files) + f". Put '{hint}' in the name of the one to use.")
+
+
 def resolve_inputs(args: argparse.Namespace) -> tuple[Path, Path] | None:
     if args.client:
         folder = CLIENTS_DIR / args.client
-        contract = next((folder / f"contract{s}" for s in CONTRACT_SUFFIXES if (folder / f"contract{s}").exists()),
-                        folder / "contract.md")
-        return contract, folder / "invoices.csv"
+        if not folder.is_dir():
+            raise InputError(f"There is no folder {display_path(folder)}/. Create it and put the signed contract "
+                             "and the invoice export inside, then run this again.")
+        return (_pick_file(folder, CONTRACT_SUFFIXES, "contract", "contract"),
+                _pick_file(folder, SPREADSHEET_SUFFIXES, "invoice", "invoice export"))
     if args.contract:
         return args.contract.resolve(), args.invoices.resolve()
     return None
 
 
+CONTRACT_NUMBER = re.compile(r"(?:Order Form|Contract|Agreement)\s+(?:No\.?|Number|#)\s*:?\**\s*([A-Z0-9][A-Z0-9-]+)", re.IGNORECASE)
+
+
 def contract_id(path: Path) -> str:
-    match = re.search(r"Order Form No\.:\**\s*([A-Z0-9-]+)", path.read_text(encoding="utf-8")) if path.exists() else None
+    try:
+        match = CONTRACT_NUMBER.search(read_document(path))
+    except (OSError, DocumentError):
+        match = None
     return match.group(1) if match else path.stem
+
+
+CUSTOMER_LINE = re.compile(r"^\W*(?:Customer|Client)\W*:\**\s*(.+?)\s*(?:\(\s*\"?(?:Customer|Client)\"?\s*\))?\s*$",
+                           re.IGNORECASE | re.MULTILINE)
+
+
+def fill_customer(intake: IntakeResult, contract_text: str, fallback: str) -> None:
+    """The ledger needs a client name on every row; exports without a customer column get the contract's."""
+    if all(r["customer_name"] for r in intake.rows):
+        return
+    match = CUSTOMER_LINE.search(contract_text)
+    name = match.group(1).strip(" *") if match else fallback
+    for r in intake.rows:
+        r["customer_name"] = r["customer_name"] or name
+    intake.notes.append(f"The export has no customer column, so rows are labelled '{name}'"
+                        + (" from the contract." if match else "."))
+
+
+def render_intake(intake: IntakeResult, invoices: Path) -> None:
+    if not intake.notes:
+        return
+    body = Text("\n".join(f"·  {note}" for note in intake.notes), style="grey70")
+    console.print(Panel(body, title=f"[bold cyan]INTAKE[/]  [grey62]{len(intake.rows)} invoices ready for the Analyst[/]",
+                        subtitle=f"[grey50]{display_path(invoices)}[/]", border_style="cyan", padding=(1, 2)))
 
 # Camera-ready: never narrower than the layout needs (also when piped/recorded).
 console = Console(width=max(Console().width, 132))
@@ -378,7 +427,11 @@ def write_ledger(report: AuditReport, scout: ScoutResult) -> bool:
 def main() -> int:
     global CONTRACT, ERP_CSV
     args = parse_args()
-    inputs = resolve_inputs(args)
+    try:
+        inputs = resolve_inputs(args)
+    except InputError as exc:
+        console.print(Panel(f"[bold red]{exc}[/]", border_style="red"))
+        return 1
 
     if inputs is None:
         if not CONTRACT.exists() or not ERP_CSV.exists():
@@ -395,19 +448,30 @@ def main() -> int:
                 border_style="red",
             ))
             return 1
-        if CONTRACT.suffix.lower() == ".pdf":
-            console.print(Panel(
-                "[bold red]The contract must be text or Markdown, not PDF.[/]\n"
-                "[grey70]Extract the text first (e.g. pdftotext), then pass the .txt or .md file.[/]",
-                border_style="red",
-            ))
-            return 1
+
+    try:
+        contract_text = read_document(CONTRACT)
+    except DocumentError as exc:
+        console.print(Panel(f"[bold red]Couldn't read the contract.[/]\n[grey70]{exc}[/]", border_style="red"))
+        return 1
 
     render_header()
 
+    # Intake runs before the Scout so any questions about the export are asked up front.
+    try:
+        intake = load_invoices(ERP_CSV, contract_text, console)
+    except IntakeError as exc:
+        console.print(Panel(f"[bold red]Couldn't read the invoice export.[/]\n[grey70]{exc}[/]", border_style="red"))
+        return 1
+    except (EOFError, KeyboardInterrupt):
+        console.print("\n[yellow]Stopped before the invoice export was confirmed. Nothing was saved or sent.[/]")
+        return 1
+    fill_customer(intake, contract_text, args.client or CONTRACT.stem)
+    render_intake(intake, ERP_CSV)
+
     with console.status("[cyan]Scout: Qwen is reading the contract…[/]", spinner="dots"):
         try:
-            scout = extract_terms(CONTRACT)
+            scout = extract_terms(CONTRACT, contract_text=contract_text)
         except Exception as exc:  # surface Ollama/connection issues clearly
             console.print(Panel(f"[bold red]Scout failed:[/] {exc}\n\nIs Ollama running? "
                                 "Try: [bold]ollama serve[/] and [bold]ollama pull qwen3:14b[/]",
@@ -416,7 +480,7 @@ def main() -> int:
     render_extraction(scout)
 
     with console.status("[yellow]Analyst: reconciling ERP export…[/]", spinner="dots"):
-        report = reconcile(scout.terms, ERP_CSV)
+        report = reconcile_rows(scout.terms, intake.rows)
     render_audit(report)
 
     if not report.leaking_lines:

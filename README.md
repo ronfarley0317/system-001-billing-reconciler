@@ -282,19 +282,47 @@ python generate_demo_data.py       # rebuild the demo contract and ERP export
 
 ### 7. Run on your own data
 
-Each run takes one contract and one invoice export for one customer.
+Make a folder for the client and drop in two files, exactly as they came out of their systems. No renaming, no reformatting.
 
-```bash
-python run_demo.py --client companyx                                        # reads clients/companyx/
-python run_demo.py --contract path/to/contract.md --invoices path/to/export.csv
+```text
+clients/acme/
+├── Signed Order Form.pdf      the contract: PDF, Word (.docx), text or Markdown
+└── Invoices 2025.xlsx         the invoice export: Excel or CSV, from QuickBooks, NetSuite, Xero or anything else
 ```
 
-With `--client`, put two files in `clients/<name>/`: `contract.md` (or `contract.txt`) and `invoices.csv`. The `clients/` folder is git-ignored, so client data is never committed.
+```bash
+python run_demo.py --client acme
+```
 
-| Input | Requirements |
-|---|---|
-| Contract | Plain text or Markdown. Convert a PDF to text first (`pdftotext`, or OCR for a scan). Citations are verified word for word against this file. |
-| Invoice CSV | Columns `invoice_id`, `invoice_date` (`YYYY-MM-DD`), `quantity`, `unit_price`, `amount_billed` (plain numbers, no `$` or commas). `customer_name` is optional. |
+The first time, the intake shows how it read the export and asks you to check it:
+
+```text
+╭──────────────────────── INTAKE  Invoices 2025.xlsx ────────────────────────╮
+│   We need                   Your column              Example from your file │
+│   Invoice number            Num                      1001                   │
+│   Invoice date              Date  (month/day/year)   6/1/2025               │
+│   Quantity (seats, units)   Qty                      60                     │
+│   Unit price                Sales Price              $200.00                │
+│   Amount billed             Amount                   $12,000.00             │
+│   Customer                  Name                     Apex Logistics Group   │
+│   Product or item           Item                     Fleet Telematics Seat  │
+╰─────────────────────────────────────────────────────────────────────────────╯
+Does this look right? [y/n] (y):
+```
+
+Press Enter if it's right, or `n` to pick the columns yourself from a numbered list. Your answers are saved next to the export (`Invoices 2025.mapping.json`) and reused on every later run while the file layout stays the same.
+
+**What the intake sorts out for you**
+
+- **Any column names.** `Num`, `Invoice #`, `Qty`, `Seats`, `Rate`, `Line Total` and dozens more are recognised. Anything it doesn't recognise is named by the local model, and you confirm it. The model only names columns; it never reads or produces a number.
+- **Report clutter.** Titles above the headings, blank lines, subtotal and total rows are skipped.
+- **Any common date format,** including Excel dates and day-first dates. If it can't tell 03/04 apart, it asks once.
+- **Any common amount format:** `$12,000.00`, `12.000,00`, `(500.00)`.
+- **Several customers or products in one export.** It asks which ones this contract covers, and pre-selects the answer it finds in the contract. Tax lines are left out by default.
+- **One invoice split over several lines** is combined into one. **Credit notes** are set aside and listed for you to review.
+- **No unit price, or no quantity?** It is worked out from the amount, in Python `Decimal`.
+
+The export needs four things: an invoice number, an invoice date, the amount billed, and either the quantity or the unit price. If the folder holds more than one possible contract or export, put `contract` or `invoice` in the name of the right one. You can also point at files anywhere: `python run_demo.py --contract path/to/contract.pdf --invoices path/to/export.xlsx`. The `clients/` folder is git-ignored, so client data is never committed.
 
 > [!TIP]
 > Before each recording take or demo, reset the rows to `PENDING_APPROVAL`. The approve step only updates pending rows.
@@ -316,6 +344,8 @@ system-001-billing-reconciler/
 │   ├── db_client.py                Idempotent upsert into detected_leaks
 │   ├── dossier.py                  Approval card, audit report and leak descriptions
 │   ├── notifier.py                 Telegram delivery: report first, then the card
+│   ├── ingest.py                   Reads any invoice export (CSV or Excel) into the Analyst's layout
+│   ├── documents.py                Reads contracts from PDF, Word, text or Markdown
 │   └── render_pdfs.py              Client uploads to PDF, with a folder watcher
 ├── n8n/
 │   └── telegram_approval_webhook.json   Approve / deny routing and the finance email
@@ -334,6 +364,7 @@ Each file has exactly one job. When something breaks, you know where to look. Th
 | Data | Where it goes | Why |
 |:--|:--|:--|
 | Full contract text | **Stays on this machine.** Read by Ollama on `localhost` | Extraction only |
+| Invoice export, plus the column names and sample rows the intake shows the local model | **Stays on this machine** | Reading the client's layout |
 | Extracted terms and all calculations | **Stays on this machine** | Python `Decimal` |
 | Each finding: client, invoice, amount, clause quote, description | Your Supabase project | The system of record |
 | Approval card and the attached audit report (includes contract quotes) | The Telegram chat you configure | The human decision |
@@ -348,7 +379,7 @@ The contract is never sent to an AI provider. What leaves the machine is the min
 
 - **Six pricing terms are extracted:** base rate, promo rate, promo expiry, annual escalator, escalator start date and monthly minimum. Other clause types need a field in `schemas/payloads.py` and a rule in `agents/analyst.py`.
 - **One contract and one ERP export per run.** Pass them with `--client` or `--contract`/`--invoices`; with neither, the demo data runs.
-- **The Scout reads contract text.** The demo contract is Markdown; a scanned PDF needs text extraction first.
+- **Contracts can be PDF, Word, text or Markdown.** A scanned PDF with no text layer needs OCR first; the tool says so when that's the case.
 - **All numbers in this README come from the synthetic benchmark dataset.**
 
 ---

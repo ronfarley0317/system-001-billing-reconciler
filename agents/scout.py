@@ -78,9 +78,11 @@ def _client() -> OpenAI:
     return OpenAI(base_url=base_url, api_key="ollama")
 
 
-def extract_terms(contract_path: Path, model: str | None = None) -> ScoutResult:
+def extract_terms(contract_path: Path, model: str | None = None, contract_text: str | None = None) -> ScoutResult:
+    """`contract_text` is the already-extracted text (PDF, Word...); citations are verified against it."""
     model = model or os.getenv("OLLAMA_MODEL", "qwen3:14b")
-    contract_text = contract_path.read_text(encoding="utf-8")
+    if contract_text is None:
+        contract_text = contract_path.read_text(encoding="utf-8")
 
     started = time.perf_counter()
     completion = _client().chat.completions.parse(

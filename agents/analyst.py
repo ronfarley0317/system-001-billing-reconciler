@@ -156,8 +156,11 @@ def audit_row(terms: ExtractedContractTerms, row: dict[str, str]) -> LineAudit:
 
 def reconcile(terms: ExtractedContractTerms, csv_path: Path) -> AuditReport:
     with csv_path.open(newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
+        return reconcile_rows(terms, list(csv.DictReader(fh)))
 
+
+def reconcile_rows(terms: ExtractedContractTerms, rows: list[dict[str, str]]) -> AuditReport:
+    """Rows in the canonical layout (see tools/ingest.py): ISO dates, plain decimal strings."""
     lines = sorted((audit_row(terms, r) for r in rows), key=lambda l: l.invoice_date)
 
     leak_totals: dict[str, Decimal] = {}
