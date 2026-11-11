@@ -11,6 +11,8 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from openai import OpenAI
@@ -37,7 +39,12 @@ class CitationCheck:
     field_name: str
     section: str
     quote: str
-    verified: bool
+    verified: bool  # the quote appears in the contract
+    value_in_quote: bool  # the extracted value appears inside that same quote
+
+    @property
+    def ok(self) -> bool:
+        return self.verified and self.value_in_quote
 
 
 @dataclass(frozen=True)
@@ -51,12 +58,64 @@ class ScoutResult:
     def all_citations_verified(self) -> bool:
         return bool(self.citation_checks) and all(c.verified for c in self.citation_checks)
 
+    @property
+    def all_values_in_quotes(self) -> bool:
+        return bool(self.citation_checks) and all(c.value_in_quote for c in self.citation_checks)
+
+    @property
+    def integrity_ok(self) -> bool:
+        return self.all_citations_verified and self.all_values_in_quotes
+
 
 def _normalise(text: str) -> str:
     """Collapse whitespace/markdown emphasis so line-wrapped quotes still match."""
     text = text.replace("**", "").replace("`", "")
     text = text.replace("“", '"').replace("”", '"').replace("’", "'")
     return re.sub(r"\s+", " ", text).strip().lower()
+
+
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> set[Decimal]:
+    found: set[Decimal] = set()
+    for token in _NUMBER.findall(text):
+        try:
+            found.add(Decimal(token.replace(",", "")))
+        except InvalidOperation:
+            continue
+    return found
+
+
+def _date_forms(d: date) -> set[str]:
+    month = f"{d:%B}".lower()
+    return {
+        f"{month} {d.day}, {d.year}",
+        f"{month} {d.day} {d.year}",
+        f"{d.day} {month} {d.year}",
+        d.isoformat(),
+        f"{d.month:02d}/{d.day:02d}/{d.year}",
+        f"{d.month}/{d.day}/{d.year}",
+    }
+
+
+def value_in_quote(value: object, quote: str) -> bool:
+    """Is the value the model extracted actually written inside the quote it cited?
+
+    Catches the failure the quote check cannot: a real sentence cited with a misread
+    number (e.g. the clause says 5.0% but the field says 50.0). Numbers are compared
+    as Decimal, so "$12,000.00", "12,000" and "12000.00" all match 12000.00. Values
+    written only in words ("five percent") do not match; that is flagged for review
+    on purpose rather than guessed.
+    """
+    if value is None:
+        return False
+    text = _normalise(quote)
+    if isinstance(value, date):
+        return any(form in text for form in _date_forms(value))
+    if isinstance(value, Decimal):
+        return value in _numbers_in(text)
+    return _normalise(str(value)) in text
 
 
 def verify_citations(terms: ExtractedContractTerms, contract_text: str) -> list[CitationCheck]:
@@ -67,6 +126,7 @@ def verify_citations(terms: ExtractedContractTerms, contract_text: str) -> list[
             section=c.section,
             quote=c.quote,
             verified=_normalise(c.quote).rstrip(".") in haystack,
+            value_in_quote=value_in_quote(getattr(terms, c.field_name, None), c.quote),
         )
         for c in terms.verbatim_citations
     ]

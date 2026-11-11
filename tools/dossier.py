@@ -14,7 +14,7 @@ from decimal import Decimal
 from agents.analyst import (
     LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, AuditReport, LineAudit,
 )
-from agents.scout import ScoutResult
+from agents.scout import CitationCheck, ScoutResult
 from schemas.payloads import ExtractedContractTerms
 
 LEAK_ORDER = (LEAK_PROMO, LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER)
@@ -135,6 +135,7 @@ def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_
     e = html.escape
     leaking = report.leaking_lines
     verified = sum(c.verified for c in scout.citation_checks)
+    in_quote = sum(c.value_in_quote for c in scout.citation_checks)
 
     parts = [
         "🚨 <b>REVENUE LEAK DETECTED</b>",
@@ -156,10 +157,28 @@ def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_
     parts += [
         "",
         f"<b>Contract citations:</b> {verified}/{len(scout.citation_checks)} verified against source",
+        f"<b>Extracted values:</b> {in_quote}/{len(scout.citation_checks)} found in their own quote",
     ]
+    if not scout.integrity_ok:
+        parts.append("⚠️ <b>Review the contract before approving.</b> At least one check failed.")
     if report_attached:
         parts.append("📄 Full line-by-line report attached above.")
     return "\n".join(parts)
+
+
+def _citation_item(c: CitationCheck) -> str:
+    e = html.escape
+    mark, cls = ("✔", "ok") if c.ok else ("✘", "bad")
+    if not c.verified:
+        problem = ' <span class="bad">quote not found in contract</span>'
+    elif not c.value_in_quote:
+        problem = ' <span class="bad">value not found in this quote</span>'
+    else:
+        problem = ""
+    section = e(c.section.lstrip("§ "))
+    return (f'<li><span class="{cls}">{mark}</span> '
+            f'<b>§{section}</b> <span class="muted">{e(c.field_name)}</span>{problem}'
+            f"<br>{e(c.quote)}</li>")
 
 
 def report_html(report: AuditReport, scout: ScoutResult, contract_id: str) -> str:
@@ -189,11 +208,7 @@ def report_html(report: AuditReport, scout: ScoutResult, contract_id: str) -> st
         for l in report.lines
     )
 
-    citation_rows = "".join(
-        f"<li><span class=\"{'ok' if c.verified else 'bad'}\">{'✔' if c.verified else '✘'}</span> "
-        f"<b>§{e(c.section.lstrip('§ '))}</b> <span class=\"muted\">{e(c.field_name)}</span><br>{e(c.quote)}</li>"
-        for c in scout.citation_checks
-    )
+    citation_rows = "".join(_citation_item(c) for c in scout.citation_checks)
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -255,6 +270,6 @@ def report_html(report: AuditReport, scout: ScoutResult, contract_id: str) -> st
   <ul class="cites">{citation_rows}</ul>
 
   <footer>Generated {datetime.now():%b %d, %Y %I:%M %p} by System #001: Deterministic Billing Reconciler.
-  Contract terms extracted by a local model and verified word for word against the source. All amounts computed in Python Decimal.</footer>
+  Contract terms extracted by a local model, verified word for word against the source, and each value checked against its own quote. All amounts computed in Python Decimal.</footer>
 </main></body></html>
 """

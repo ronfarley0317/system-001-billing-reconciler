@@ -141,7 +141,7 @@ These are enforced in code, not left to convention. They are also written into [
 <td width="50%" valign="top">
 
 **Every term must be quoted**<br>
-<sub>Each extracted term comes with a quote from the contract. Each quote is checked against the source text (ignoring only case, whitespace and markdown emphasis). A made-up clause shows up as <code>NOT FOUND</code>, in red.</sub>
+<sub>Each extracted term comes with a quote from the contract. Two checks run in plain Python. The quote must exist in the source text (ignoring only case, whitespace and markdown emphasis), so a made-up clause shows up as <code>NOT FOUND</code>. And the extracted value must appear inside its own quote, so a real clause cited with a misread number (5.0% read as 50.0) shows up as <code>VALUE ≠ QUOTE</code>. Either failure puts a review warning on the approval card.</sub>
 
 </td>
 </tr>
@@ -336,7 +336,7 @@ system-001-billing-reconciler/
 ├── run_demo.py                     Conductor: read, reconcile, record, then ask a human
 ├── CLAUDE.md                       The rulebook: local AI only, Decimal only, ledger first
 ├── agents/
-│   ├── scout.py                    Local Qwen extraction plus word-for-word citation checks
+│   ├── scout.py                    Local Qwen extraction, quote check, and value-in-quote check
 │   └── analyst.py                  Decimal reconciliation and per-clause leak attribution
 ├── schemas/
 │   └── payloads.py                 The form the model must fill: six terms, each quoted
@@ -349,6 +349,7 @@ system-001-billing-reconciler/
 │   └── render_pdfs.py              Client uploads to PDF, with a folder watcher
 ├── n8n/
 │   └── telegram_approval_webhook.json   Approve / deny routing and the finance email
+├── tests/                          Both citation checks on the demo contract: python -m unittest discover tests
 ├── sql/                            Ledger schema for a fresh Supabase project
 ├── demo_data/                      Synthetic contract, ERP export, rendered PDFs
 ├── generate_demo_data.py           Builds the demo with three planted leaks

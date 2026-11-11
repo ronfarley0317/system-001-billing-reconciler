@@ -189,10 +189,16 @@ def render_extraction(result: ScoutResult) -> None:
             table.add_row(label, value, "", Text("no citation returned", style="yellow"),
                           Text("⚠", style="bold yellow"))
             continue
-        badge = Text("✔ match", style="bold green") if c.verified else Text("✘ NOT FOUND", style="bold red")
+        if not c.verified:
+            badge = Text("✘ NOT FOUND", style="bold red")
+        elif not c.value_in_quote:
+            badge = Text("✘ VALUE ≠ QUOTE", style="bold red")
+        else:
+            badge = Text("✔ match", style="bold green")
         table.add_row(label, value, c.section, f"“{c.quote}”", badge)
 
     verified = sum(c.verified for c in result.citation_checks)
+    in_quote = sum(c.value_in_quote for c in result.citation_checks)
     footer = Text.assemble(
         ("model ", "grey50"), (result.model, "bold magenta"),
         ("   ·   structured output → ", "grey50"), ("ExtractedContractTerms", "bold"),
@@ -200,6 +206,9 @@ def render_extraction(result: ScoutResult) -> None:
         ("   ·   citations verified against source: ", "grey50"),
         (f"{verified}/{len(result.citation_checks)}",
          "bold green" if result.all_citations_verified else "bold red"),
+        ("   ·   values found in their quote: ", "grey50"),
+        (f"{in_quote}/{len(result.citation_checks)}",
+         "bold green" if result.all_values_in_quotes else "bold red"),
     )
 
     console.print(
@@ -323,7 +332,12 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         justify="center",
     )
 
-    integrity = "✔ all contract citations verified" if scout.all_citations_verified else "⚠ unverified citations: review contract"
+    if not scout.all_citations_verified:
+        integrity = "⚠ unverified citations: review contract"
+    elif not scout.all_values_in_quotes:
+        integrity = "⚠ extracted value not found in its quote: review contract"
+    else:
+        integrity = "✔ all contract citations and values verified"
 
     body = Group(
         Text.assemble(("🤖 Billing Reconciler Bot", "bold"), ("  ·  ", "grey50"),
@@ -342,7 +356,7 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         breakdown,
         Text(""),
         Text.assemble(("Integrity  ", "grey62"),
-                      (integrity, "green" if scout.all_citations_verified else "bold yellow")),
+                      (integrity, "green" if scout.integrity_ok else "bold yellow")),
         Text.assemble(("Action     ", "grey62"),
                       ("No invoice will be issued until a human approves.", "italic")),
         Text(""),
