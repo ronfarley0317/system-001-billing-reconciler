@@ -48,6 +48,13 @@ class ApprovalWorkflow(unittest.TestCase):
         self.assertIn("$('Decide in Supabase').item.json.rows", msg)
         self.assertNotIn("getAll", json.dumps(WORKFLOW))
 
+    def test_email_is_one_line_per_cause_and_uses_the_client_name(self):
+        params = NODES["Email Finance"]["parameters"]
+        self.assertIn(".reasons.map(", params["message"])
+        self.assertNotIn("r.why", params["message"])
+        self.assertIn(".client_name", params["subject"])
+        self.assertNotIn("client_id", params["subject"] + params["message"])
+
 
 if __name__ == "__main__":
     unittest.main()

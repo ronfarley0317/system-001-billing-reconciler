@@ -9,7 +9,7 @@ written as REVIEW_REQUIRED with the reasons, and never counts toward a claim.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
@@ -48,6 +48,7 @@ class Finding:
     reasons: tuple[str, ...]
     citation: str
     description: str
+    breakdown: dict[str, Decimal] = field(default_factory=dict)  # one short reason per cause -> amount
 
     @property
     def approvable(self) -> bool:
@@ -109,6 +110,29 @@ def evidence_problems(scout: ScoutResult, fields: set[str]) -> list[str]:
     return problems
 
 
+def _day(d: date) -> str:
+    return f"{d:%b} {d.day}, {d.year}"
+
+
+def reason_label(category: str, terms: ExtractedContractTerms) -> str:
+    """One line per cause, identical for every month it applies to, so totals can be summed by label."""
+    if category == LEAK_PROMO and terms.promo_expiration_date and terms.promo_rate is not None:
+        return f"Promo ended {_day(terms.promo_expiration_date)}; still billed at the {_usd(terms.promo_rate)} promo rate"
+    if category == LEAK_ESCALATOR and terms.escalator_effective_date and terms.annual_escalator_pct is not None:
+        return f"{terms.annual_escalator_pct}% increase from {_day(terms.escalator_effective_date)} not applied"
+    if category == LEAK_FLOOR and terms.monthly_minimum_floor is not None:
+        return f"{_usd(terms.monthly_minimum_floor)} monthly minimum not billed"
+    return "Billed rate differs from the contract rate"
+
+
+def reason_breakdown(period: PeriodAudit, terms: ExtractedContractTerms) -> dict[str, Decimal]:
+    out: dict[str, Decimal] = {}
+    for category, amount in period.leaks.items():
+        label = reason_label(category, terms)
+        out[label] = out.get(label, ZERO) + amount
+    return out
+
+
 def citation_text(period: PeriodAudit, scout: ScoutResult) -> str:
     by_field = {c.field_name: c for c in scout.terms.verbatim_citations}
     parts: list[str] = []
@@ -161,6 +185,7 @@ def build_findings(report: AuditReport, scout: ScoutResult) -> list[Finding]:
             invoice_ids=period.invoice_ids, variance_class=period.variance_class, amount=period.drift,
             status=status, reasons=tuple(reasons), citation=citation_text(period, scout),
             description=describe(period, scout.terms),
+            breakdown=reason_breakdown(period, scout.terms) if period.variance_class == UNDERBILLED else {},
         ))
 
     customer = report.periods[0].customer_name if report.periods else ""

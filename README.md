@@ -267,7 +267,7 @@ cp .env.example .env               # Windows: copy .env.example .env
 
 ### 4. Create the ledger
 
-In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql), then [`sql/003_audit_runs_and_scoped_approvals.sql`](sql/003_audit_runs_and_scoped_approvals.sql). 003 keeps existing rows.
+In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql), [`sql/003_audit_runs_and_scoped_approvals.sql`](sql/003_audit_runs_and_scoped_approvals.sql), then [`sql/004_finding_breakdown_for_finance_email.sql`](sql/004_finding_breakdown_for_finance_email.sql). Each keeps existing rows.
 
 Then add yourself as an approver (your Telegram user id, from @userinfobot):
 

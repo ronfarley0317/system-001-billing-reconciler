@@ -186,9 +186,9 @@
     {
       "parameters": {
         "sendTo": "REPLACE_WITH_FINANCE_EMAIL",
-        "subject": "=APPROVED: Issue catch-up invoices for {{ $('Decide in Supabase').item.json.client_id }} ({{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }})",
+        "subject": "=Approved: catch-up invoices for {{ $('Decide in Supabase').item.json.client_name }} ({{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }})",
         "emailType": "text",
-        "message": "=Finance team,\n\nThe billing reconciliation for {{ $('Decide in Supabase').item.json.client_id }} (contract {{ $('Decide in Supabase').item.json.contract_id }}, audit run {{ $('Decide in Supabase').item.json.run_id }}) has been reviewed and approved.\n\nPlease issue catch-up invoices for the following under-billed months:\n\n{{ $('Decide in Supabase').item.json.rows.map(r => r.period + ' (' + r.invoices + '): $' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })).join('\\n') }}\n\nTotal approved: {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }} across {{ $('Decide in Supabase').item.json.count }} month(s).\n\nWhy each month was under-billed:\n{{ $('Decide in Supabase').item.json.rows.map(r => '- ' + r.why).join('\\n') }}\n\nOnly the findings in this audit run were approved. Each amount is tied to a verified clause in the signed contract, and the decision is recorded in the detected_leaks ledger and its finding_events history.\n\nApproved by: {{ $('Decide in Supabase').item.json.approver }}\nApproved at: {{ $now.toFormat('MMMM d, yyyy h:mm a ZZZZ') }}\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
+        "message": "=Finance team,\n\nPlease issue catch-up invoices for {{ $('Decide in Supabase').item.json.client_name }} (contract {{ $('Decide in Supabase').item.json.contract_id }}).\n\n{{ $('Decide in Supabase').item.json.rows.map(r => r.period + '   ' + r.invoices + '   ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\nTotal: {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} across {{ $('Decide in Supabase').item.json.count }} month(s)\n\nWhy, from the signed contract:\n{{ $('Decide in Supabase').item.json.reasons.map(r => '- ' + r.reason + ': ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\n\nApproved by {{ $('Decide in Supabase').item.json.approver }}, {{ $now.toFormat('MMM d, yyyy h:mm a ZZZZ') }}. Audit run {{ String($('Decide in Supabase').item.json.run_id).slice(0, 8) }}.\n\nEach amount is tied to a verified clause in the signed contract. Month-by-month detail is in the ledger.\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
         "options": {
           "appendAttribution": false
         }
@@ -213,7 +213,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Parse Button').item.json.chat_id }}",
-        "text": "=✅ Approved {{ $('Decide in Supabase').item.json.count }} finding(s) for {{ $('Decide in Supabase').item.json.client_id }}, totaling {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}. Finance has been emailed. Only this audit run was affected.",
+        "text": "=✅ Approved {{ $('Decide in Supabase').item.json.count }} month(s) for {{ $('Decide in Supabase').item.json.client_name }}, totaling {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}. Finance has been emailed. Only this audit run was affected.",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -238,7 +238,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Parse Button').item.json.chat_id }}",
-        "text": "=❌ Denied {{ $('Decide in Supabase').item.json.count }} finding(s) for {{ $('Decide in Supabase').item.json.client_id }}. Nothing will be billed. Only this audit run was affected.",
+        "text": "=❌ Denied {{ $('Decide in Supabase').item.json.count }} month(s) for {{ $('Decide in Supabase').item.json.client_name }}. Nothing will be billed. Only this audit run was affected.",
         "additionalFields": {
           "appendAttribution": false
         }

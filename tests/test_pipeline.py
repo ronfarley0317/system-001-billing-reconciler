@@ -98,6 +98,8 @@ class LedgerCalls(unittest.TestCase):
         first = calls[1][1]
         self.assertIsInstance(first["p_amount"], str)
         json.dumps(first)  # everything sent is JSON-safe; no Decimal or float
+        self.assertEqual(first["p_leak_breakdown"],
+                         {"Promo ended Jun 30, 2025; still billed at the $200.00 promo rate": "3000.00"})
         self.assertEqual(run.approvable_total, D("37250.00"))
 
     def test_failed_write_never_opens_the_run(self):

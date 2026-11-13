@@ -65,13 +65,14 @@ for the same contract supersedes older open cards.
 
 ## Tests
 
-`python -m unittest discover tests`: 62 tests, no Ollama, Supabase or Telegram needed.
+`python -m unittest discover tests`: 76 tests (also run on Python 3.9), no Ollama, Supabase or Telegram needed.
 `tests/test_sql_ledger.py` starts a throwaway local Postgres and runs the real migrations; it
 skips itself where Postgres is not installed (for example on Windows without it).
 
 ## Deploy (by hand, in this order)
 
-1. Supabase SQL editor: run `sql/003_audit_runs_and_scoped_approvals.sql`.
+1. Supabase SQL editor: run `sql/003_audit_runs_and_scoped_approvals.sql`, then `sql/004_finding_breakdown_for_finance_email.sql`
+   (one line per cause in the finance email, and the client's name instead of its id).
 2. Add yourself: `insert into authorized_approvers (telegram_user_id, display_name) values (<your id>, 'Ron');`
 3. n8n: deactivate the old approval workflow, import the new JSON, set the credentials, the
    Supabase URL in "Decide in Supabase", and the finance email. Activate.

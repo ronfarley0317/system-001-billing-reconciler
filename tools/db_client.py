@@ -73,6 +73,7 @@ def record_finding(run_id: str, finding: Finding, sb: Client | None = None) -> s
         "p_citation": finding.citation,
         "p_description": finding.description,
         "p_review_reasons": "; ".join(finding.reasons),
+        "p_leak_breakdown": {label: _money(amount) for label, amount in finding.breakdown.items()},
     }
     return sb.rpc("record_finding", params).execute().data
 

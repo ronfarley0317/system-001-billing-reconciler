@@ -68,6 +68,8 @@ class LedgerSQL(unittest.TestCase):
                 "('Apex Logistics Group, LLC', 'INV-2', 3000.00, 'PENDING_APPROVAL')")
         cls.psql(SQL / "003_audit_runs_and_scoped_approvals.sql")
         cls.psql(SQL / "003_audit_runs_and_scoped_approvals.sql")  # running it twice must be safe
+        cls.psql(SQL / "004_finding_breakdown_for_finance_email.sql")
+        cls.psql(SQL / "004_finding_breakdown_for_finance_email.sql")
         cls.sql("insert into authorized_approvers values (42, 'Ron', true)")
 
     @classmethod
@@ -103,9 +105,11 @@ class LedgerSQL(unittest.TestCase):
     def new_run(self, client="apex", contract="MS-OF-2025-0117") -> str:
         return self.sql(f"select start_audit_run('{client}', '{contract}')")
 
-    def record(self, run, key, amount="3000.00", status="PENDING_APPROVAL", cls_="UNDERBILLED") -> str:
+    def record(self, run, key, amount="3000.00", status="PENDING_APPROVAL", cls_="UNDERBILLED",
+               breakdown=None) -> str:
+        extra = f", '{json.dumps(breakdown)}'::jsonb" if breakdown is not None else ""
         return self.sql(f"select record_finding('{run}', '{key}', 'Apex', 'INV', 'INV', '2025-07-01', "
-                        f"'{cls_}', '{status}', {amount}, 'cite', 'why', '')")
+                        f"'{cls_}', '{status}', {amount}, 'cite', 'why', ''{extra})")
 
     def decide(self, run, decision="APPROVE", user=42) -> dict:
         return json.loads(self.sql(f"select decide_audit_run('{run}', '{decision}', {user})"))
@@ -147,6 +151,21 @@ class LedgerSQL(unittest.TestCase):
         events = self.sql(f"select count(*) from finding_events e join detected_leaks d on d.id = e.finding_id "
                           f"where d.audit_run_id = '{run}' and e.to_status = 'APPROVED' and e.actor like 'Ron%'")
         self.assertEqual(events, "2")
+
+    def test_decision_returns_client_name_and_reason_totals(self):
+        run = self.new_run("email", "C-EMAIL")
+        self.record(run, "period:2025-07", "3000.00", breakdown={"Promo ended": "3000.00"})
+        self.record(run, "period:2026-04", "4000.00",
+                    breakdown={"Promo ended": "2000.00", "Increase not applied": "500.00", "Minimum not billed": "1500.00"})
+        self.sql(f"select open_audit_run('{run}')")
+        result = self.decide(run)
+        self.assertEqual(result["client_name"], "Apex")
+        self.assertEqual(result["reasons"], [
+            {"reason": "Promo ended", "amount": "5000.00"},
+            {"reason": "Minimum not billed", "amount": "1500.00"},
+            {"reason": "Increase not applied", "amount": "500.00"},
+        ])
+        self.assertEqual(sorted(r["amount"] for r in result["rows"]), ["3000.00", "4000.00"])
 
     def test_rerun_keeps_decisions_and_supersedes_old_card(self):
         first = self.new_run("rerun", "C-RERUN")
