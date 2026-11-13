@@ -2,9 +2,11 @@
 
     Scout   (Qwen via Ollama)  -> transcribes contract language into a typed schema
     Verify  (pure Python)      -> every citation must appear verbatim in the contract
-    Analyst (Decimal + csv)    -> recomputes every invoice and attributes the drift
-    Ledger  (Supabase)         -> upserts every leaking invoice into `detected_leaks`
-    HITL    (Telegram)         -> approval card for the total arrears (only if the ledger write succeeds)
+    Analyst (Decimal + csv)    -> recomputes every invoice, applies the minimum per billing month,
+                                  and classifies each month (under-billed, over-billed, review)
+    Gate    (pure Python)      -> a month is approvable only if every term behind it is verified
+    Ledger  (Supabase)         -> one audit run per execution; findings scoped to client + contract
+    HITL    (Telegram)         -> approval card for that run only (only if the ledger write succeeds)
 """
 
 from __future__ import annotations
@@ -29,12 +31,10 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-from agents.analyst import (  # noqa: E402
-    LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, AuditReport, LineAudit, reconcile_rows,
-)
+from agents.analyst import AuditReport, reconcile_rows  # noqa: E402
+from agents.findings import Finding, approvable_view, build_findings  # noqa: E402
 from agents.scout import ScoutResult, extract_terms  # noqa: E402
-from tools.db_client import log_leak  # noqa: E402
-from tools.dossier import invoice_description  # noqa: E402
+from tools.db_client import OpenedRun, client_slug, record_audit  # noqa: E402
 from tools.notifier import send_hitl_dossier  # noqa: E402
 from tools.documents import CONTRACT_SUFFIXES, DocumentError, read_document  # noqa: E402
 from tools.ingest import SPREADSHEET_SUFFIXES, IntakeError, IntakeResult, load_invoices, mapping_path  # noqa: E402
@@ -260,6 +260,9 @@ def render_audit(report: AuditReport) -> None:
             tags = Text(" ").join(
                 Text(f" {LEAK_TAGS[k][0]} ", style=f"bold black on {LEAK_TAGS[k][1]}") for k in line.leaks
             )
+        elif line.drift < 0:
+            drift = Text(f"-{usd(-line.drift)}", style="bold cyan")
+            tags = Text(" OVER ", style="bold black on cyan")
         else:
             drift = Text(usd(line.drift), style="green")
             tags = Text("✔ clean", style="green")
@@ -293,6 +296,8 @@ def render_audit(report: AuditReport) -> None:
         *[part for k, (tag, color) in LEAK_TAGS.items() if k in report.leak_totals
           for part in ((f" {tag} ", f"bold black on {color}"), (f" {k}   ", "grey62"))],
         ("* ", "bold yellow"), ("monthly minimum floor applied", "grey62"),
+        *((("   ·   over-billed (not a claim): ", "grey62"), (usd(report.total_overbilled), "bold cyan"))
+          if report.total_overbilled else ()),
     )
 
     console.print(
@@ -309,12 +314,31 @@ def render_audit(report: AuditReport) -> None:
 # --------------------------------------------------------------------------- #
 # Panel 3 - Simulated Telegram HITL approval card
 # --------------------------------------------------------------------------- #
-def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
+def render_review(findings: list[Finding]) -> None:
+    review = [f for f in findings if not f.approvable]
+    if not review:
+        return
+    table = Table(box=box.SIMPLE, expand=True, show_edge=False, header_style="bold grey70")
+    table.add_column("Month", no_wrap=True)
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Variance", justify="right", no_wrap=True)
+    table.add_column("Why a person has to look", style="grey70", ratio=1)
+    for f in review:
+        table.add_row(f"{f.period:%b %Y}", f.variance_class, usd(f.amount), "; ".join(f.reasons))
+    console.print(Panel(table, title="[bold]REVIEW REQUIRED[/]  [grey62]not approvable, never part of a claim[/]",
+                        border_style="bold yellow", padding=(1, 1)))
+
+
+def render_hitl(report: AuditReport, scout: ScoutResult, total: Decimal | None = None,
+                review_count: int = 0) -> None:
     leaking = report.leaking_lines
     if not leaking:
-        console.print(Panel("[bold green]✔ No billing drift found. Nothing to approve.[/]",
-                            border_style="green"))
+        message = "[bold green]✔ No approvable under-billing. Nothing to approve.[/]"
+        if review_count:
+            message += f"\n[yellow]{review_count} item(s) need review (see above).[/]"
+        console.print(Panel(message, border_style="green"))
         return
+    total = report.total_arrears if total is None else total
     first, last = leaking[0].invoice_date, leaking[-1].invoice_date
 
     breakdown = Table.grid(padding=(0, 2))
@@ -324,7 +348,7 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         tag, color = LEAK_TAGS[name]
         breakdown.add_row(Text.assemble((f" {tag:^5} ", f"bold black on {color}"), f"  {name}"), usd(amount))
 
-    headline = Text(f"{usd(report.total_arrears)}", style="bold white on red", justify="center")
+    headline = Text(f"{usd(total)}", style="bold white on red", justify="center")
 
     buttons = Text.assemble(
         ("  ✅ APPROVE CLAIM  ", "bold black on green"), "     ",
@@ -332,12 +356,9 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         justify="center",
     )
 
-    if not scout.all_citations_verified:
-        integrity = "⚠ unverified citations: review contract"
-    elif not scout.all_values_in_quotes:
-        integrity = "⚠ extracted value not found in its quote: review contract"
-    else:
-        integrity = "✔ all contract citations and values verified"
+    integrity = "✔ every term behind this amount is verified in the contract"
+    if review_count:
+        integrity += f"   ·   ⚠ {review_count} item(s) held for review"
 
     body = Group(
         Text.assemble(("🤖 Billing Reconciler Bot", "bold"), ("  ·  ", "grey50"),
@@ -348,7 +369,7 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         Text.assemble(("Customer   ", "grey62"), (leaking[0].customer_name, "bold")),
         Text.assemble(("Contract   ", "grey62"), (contract_id(CONTRACT), "bold")),
         Text.assemble(("Period     ", "grey62"), (f"{first:%b %Y} → {last:%b %Y}", "bold"),
-                      ("   ·   ", "grey50"), (f"{len(leaking)} of {len(report.lines)} invoices under-billed", "bold")),
+                      ("   ·   ", "grey50"), (f"{len(leaking)} invoices under-billed", "bold")),
         Text(""),
         Text("TOTAL HISTORICAL ARREARS", style="bold grey70", justify="center"),
         headline,
@@ -356,7 +377,7 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
         breakdown,
         Text(""),
         Text.assemble(("Integrity  ", "grey62"),
-                      (integrity, "green" if scout.integrity_ok else "bold yellow")),
+                      (integrity, "green" if not review_count else "bold yellow")),
         Text.assemble(("Action     ", "grey62"),
                       ("No invoice will be issued until a human approves.", "italic")),
         Text(""),
@@ -382,60 +403,38 @@ def render_hitl(report: AuditReport, scout: ScoutResult) -> None:
 # --------------------------------------------------------------------------- #
 # Step 4 - Supabase state ledger
 # --------------------------------------------------------------------------- #
-# Which extracted clauses justify each leak category.
-LEAK_CITATION_FIELDS = {
-    LEAK_PROMO: ("promo_expiration_date",),
-    LEAK_ESCALATOR: ("annual_escalator_pct", "escalator_effective_date"),
-    LEAK_FLOOR: ("monthly_minimum_floor",),
-    LEAK_OTHER: ("base_rate",),
-}
-
-
-def citation_for(line: LineAudit, scout: ScoutResult) -> str:
-    """Concatenate every contract citation supporting this invoice's leaks (deduped, in order)."""
-    by_field = {c.field_name: c for c in scout.terms.verbatim_citations}
-    parts: list[str] = []
-    for leak in line.leaks:
-        for field in LEAK_CITATION_FIELDS.get(leak, ()):
-            c = by_field.get(field)
-            if c is None:
-                continue
-            part = f"§{c.section}: {c.quote}"
-            if part not in parts:
-                parts.append(part)
-    return " | ".join(parts) or "No supporting citation extracted"
-
-
-def write_ledger(report: AuditReport, scout: ScoutResult) -> bool:
+def write_ledger(findings: list[Finding], client_id: str, contract: str) -> tuple[OpenedRun, dict[str, str]] | None:
     table = Table(box=box.SIMPLE, expand=True, show_edge=False, header_style="bold grey70")
-    table.add_column("Invoice", style="grey70", no_wrap=True)
-    table.add_column("Arrears", justify="right", style="bold", no_wrap=True)
+    table.add_column("Month", style="grey70", no_wrap=True)
+    table.add_column("Invoices", style="grey62", no_wrap=True)
+    table.add_column("Amount", justify="right", style="bold", no_wrap=True)
     table.add_column("Contract citation(s)", style="grey62", ratio=1, overflow="ellipsis", no_wrap=True)
     table.add_column("Ledger", justify="center", no_wrap=True)
 
-    with console.status("[green]Ledger: upserting leaks to Supabase…[/]", spinner="dots"):
+    with console.status("[green]Ledger: recording this audit run in Supabase…[/]", spinner="dots"):
         try:
-            for line in report.leaking_lines:
-                citation = citation_for(line, scout)
-                log_leak(line.customer_name, line.invoice_id, line.drift, citation,
-                         invoice_description(line, scout.terms))
-                table.add_row(line.invoice_id, usd(line.drift), citation, Text("✔ upserted", style="bold green"))
+            opened, stored = record_audit(client_id, contract, findings)
         except Exception as exc:
-            console.print(Panel(table, title="[bold]③ LEDGER[/]  [grey62]partial write before failure[/]",
-                                border_style="red", padding=(1, 1)))
             console.print(f"[bold red]Supabase error:[/] {exc}")
-            return False
+            return None
+
+    styles = {"PENDING_APPROVAL": "bold green", "REVIEW_REQUIRED": "bold yellow"}
+    for f in findings:
+        status = stored.get(f.key, "?")
+        label = {"KEPT_APPROVED": "already approved", "KEPT_DENIED": "already denied"}.get(status, status)
+        table.add_row(f"{f.period:%b %Y}", ", ".join(f.invoice_ids) or "none", usd(f.amount), f.citation,
+                      Text(label, style=styles.get(status, "grey62")))
 
     footer = Text.assemble(
-        (f"{len(report.leaking_lines)} rows", "bold green"),
-        (" upserted into ", "grey50"), ("detected_leaks", "bold"),
-        (" (on_conflict=invoice_number)   ·   status defaults to ", "grey50"),
-        ("PENDING_APPROVAL", "bold yellow"),
+        ("audit run ", "grey50"), (opened.run_id[:8], "bold"),
+        ("   ·   client ", "grey50"), (client_id, "bold"),
+        ("   ·   approvable ", "grey50"), (f"{opened.approvable_count} ({usd(opened.approvable_total)})", "bold green"),
+        ("   ·   review ", "grey50"), (str(opened.review_count), "bold yellow"),
     )
     console.print(Panel(Group(table, Text(""), footer),
-                        title="[bold]③ LEDGER[/]  [grey62]Supabase state write: arrears stored as exact NUMERIC(10, 2)[/]",
+                        title="[bold]③ LEDGER[/]  [grey62]Supabase: one audit run, findings keyed by client + contract + month[/]",
                         border_style="green", padding=(1, 1)))
-    return True
+    return opened, stored
 
 
 def main() -> int:
@@ -497,25 +496,45 @@ def main() -> int:
         report = reconcile_rows(scout.terms, intake.rows)
     render_audit(report)
 
-    if not report.leaking_lines:
+    findings = build_findings(report, scout)
+    render_review(findings)
+    review_count = sum(not f.approvable for f in findings)
+
+    if not findings:
         render_hitl(report, scout)
         return 0
 
-    # Ledger first: no approval request goes out for leaks that were never recorded.
-    if not write_ledger(report, scout):
+    # The demo gets a fresh client id each run, so its findings never collide with a real client's.
+    contract = contract_id(CONTRACT)
+    client_id = client_slug(args.client) if args.client else (
+        client_slug(report.periods[0].customer_name) if inputs is not None
+        else f"demo-{datetime.now():%Y%m%d-%H%M%S}")
+
+    # Ledger first: no approval request goes out for findings that were never recorded.
+    ledger = write_ledger(findings, client_id, contract)
+    if ledger is None:
         console.print(Panel(
             "[bold red]✘ Supabase ledger write failed. Execution aborted.[/]\n"
-            "[grey70]Telegram HITL notification was NOT sent.[/]",
+            "[grey70]The run was never opened for approval, and no Telegram card was sent.[/]",
             border_style="red",
         ))
         return 1
+    opened, stored = ledger
+    open_keys = {k for k, v in stored.items() if v == "PENDING_APPROVAL"}
+    view = approvable_view(report, findings, keys=open_keys)
+    if view.total_arrears != opened.approvable_total:
+        console.print(Panel(
+            f"[bold red]✘ Ledger total {usd(opened.approvable_total)} does not match the audit "
+            f"{usd(view.total_arrears)}. No card sent.[/]", border_style="red"))
+        return 1
 
     console.print(Rule(style="grey23"))
-    render_hitl(report, scout)
+    render_hitl(view, scout, opened.approvable_total, opened.review_count)
 
-    if not args.no_telegram:
+    if not args.no_telegram and opened.approvable_count:
         with console.status("[red]Dispatching HITL card to Telegram…[/]", spinner="dots"):
-            send_hitl_dossier(report, scout, contract_id(CONTRACT))
+            send_hitl_dossier(view, scout, contract, opened, attach_report=inputs is None,
+                              review_count=opened.review_count)
     return 0
 
 

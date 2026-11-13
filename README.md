@@ -82,10 +82,11 @@ Six stages, each owned by one file. Everything inside the dashed box runs on the
 |:-:|:--|:--|:--|
 | 01 | **Input** | The signed order form and a flat ERP export. What was promised versus what was billed. | `demo_data/` · `generate_demo_data.py` |
 | 02 | **Language** | Qwen3 14B, local through Ollama, fills a strict Pydantic schema: six pricing terms, each with a verbatim quote. Temperature 0. No arithmetic. | `agents/scout.py` · `schemas/payloads.py` |
-| 03 | **Math** | Every invoice recomputed in `Decimal`, `ROUND_HALF_UP` to the cent. Every dollar of drift attributed to a clause. | `agents/analyst.py` |
-| 04 | **State** | One row per leaking invoice in `detected_leaks`, status `PENDING_APPROVAL`, with the clause and a plain-English description. | `tools/db_client.py` |
+| 03 | **Math** | Every invoice recomputed in `Decimal`, `ROUND_HALF_UP` to the cent. The monthly minimum is applied once per billing month, not per invoice. Every month is classified: under-billed, over-billed, zero, or review. | `agents/analyst.py` |
+| 03b | **Gate** | A month becomes approvable only if it is under-billed and every term behind its amount has a quote found in the contract with its value inside that quote. Everything else is `REVIEW_REQUIRED`. | `agents/findings.py` |
+| 04 | **State** | One audit run per execution. One row per finding in `detected_leaks`, keyed by client + contract + month, with the clause and a plain-English description. | `tools/db_client.py` · `sql/003_...` |
 | 05 | **Human** | An approval card that explains itself, with the full line-by-line audit attached. | `tools/dossier.py` · `tools/notifier.py` |
-| 06 | **Wiring** | n8n catches the button tap, moves the rows to `APPROVED` or `DENIED`, and on approval emails finance. It routes. It never computes. | `n8n/telegram_approval_webhook.json` |
+| 06 | **Wiring** | n8n catches the button tap and calls one database function that approves or denies that run only, for an authorized approver. On approval it emails finance the rows that function returned. It routes. It never computes. | `n8n/telegram_approval_webhook.json` |
 
 ### The approval loop
 
@@ -98,14 +99,14 @@ sequenceDiagram
     actor A as Approver
     participant N as n8n
     participant F as Finance (Gmail)
-    P->>DB: Upsert 11 leak rows as PENDING_APPROVAL
-    Note over P,DB: If this write fails, the run stops and no one is notified
-    P->>T: Line-by-line audit report, then the approval card
+    P->>DB: Start an audit run, record 11 findings, open the run
+    Note over P,DB: If any write fails, the run is never opened and no one is notified
+    P->>T: Approval card for that run (the button carries the run id)
     A->>T: Taps Approve Claim (or Deny)
     T->>N: Webhook with the button and the approver
-    N->>DB: PENDING_APPROVAL to APPROVED, scoped to this client
-    N->>DB: Read the approved rows back
-    N->>F: Invoice list, total, reasons, approver, timestamp
+    N->>DB: decide_audit_run(run id, decision, approver)
+    Note over N,DB: Checks the approver, that the run is still open, and that the total is unchanged
+    N->>F: The rows that call approved, total, reasons, approver, timestamp
     N->>T: Confirmation in the chat
 ```
 
@@ -163,13 +164,13 @@ These are enforced in code, not left to convention. They are also written into [
 <td valign="top">
 
 **Reruns are safe**<br>
-<sub>Rows are upserted on <code>invoice_number</code>, so a hundred reruns never create a duplicate. Status is never sent on upsert, so a rerun never undoes a decision a human already made.</sub>
+<sub>Findings are keyed by client, contract and month, so a rerun updates the same row and two clients can never collide. Approved and denied findings are locked in the database: a rerun leaves them exactly as decided, and every status change is kept in <code>finding_events</code>.</sub>
 
 </td>
 <td valign="top">
 
 **A person makes the call**<br>
-<sub>Nothing is billed until someone taps Approve. Deny really denies. Updates are scoped to the client on the card, and the approver's name goes into the finance email.</sub>
+<sub>Nothing is billed until an authorized approver taps Approve. A tap only affects the audit run on that card, works once, and is refused if the card is stale or the amounts changed. Over-billing and anything uncertain go to review, never into a claim.</sub>
 
 </td>
 </tr>
@@ -266,11 +267,19 @@ cp .env.example .env               # Windows: copy .env.example .env
 
 ### 4. Create the ledger
 
-In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), then [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql).
+In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql), [`sql/003_audit_runs_and_scoped_approvals.sql`](sql/003_audit_runs_and_scoped_approvals.sql), then [`sql/004_finding_breakdown_for_finance_email.sql`](sql/004_finding_breakdown_for_finance_email.sql). Each keeps existing rows.
+
+Then add yourself as an approver (your Telegram user id, from @userinfobot):
+
+```sql
+insert into authorized_approvers (telegram_user_id, display_name) values (123456789, 'Your Name');
+```
+
+No one else can approve or deny until they are added.
 
 ### 5. Wire the approval
 
-Import [`n8n/telegram_approval_webhook.json`](n8n/telegram_approval_webhook.json) into n8n. Replace each `REPLACE_WITH_...` credential and the finance email address, then switch the workflow to **Active**.
+Import [`n8n/telegram_approval_webhook.json`](n8n/telegram_approval_webhook.json) into n8n. Replace each `REPLACE_WITH_...` credential, your Supabase project URL in the **Decide in Supabase** node, and the finance email address, then switch the workflow to **Active**. Turn off any older version of this workflow: its buttons (`approve_claim`) no longer exist.
 
 ### 6. Run
 
@@ -325,7 +334,7 @@ Press Enter if it's right, or `n` to pick the columns yourself from a numbered l
 The export needs four things: an invoice number, an invoice date, the amount billed, and either the quantity or the unit price. If the folder holds more than one possible contract or export, put `contract` or `invoice` in the name of the right one. You can also point at files anywhere: `python run_demo.py --contract path/to/contract.pdf --invoices path/to/export.xlsx`. The `clients/` folder is git-ignored, so client data is never committed.
 
 > [!TIP]
-> Before each recording take or demo, reset the rows to `PENDING_APPROVAL`. The approve step only updates pending rows.
+> Every demo run gets a fresh client id (`demo-<timestamp>`), so there is nothing to reset between recording takes.
 
 <br>
 
@@ -337,19 +346,20 @@ system-001-billing-reconciler/
 ├── CLAUDE.md                       The rulebook: local AI only, Decimal only, ledger first
 ├── agents/
 │   ├── scout.py                    Local Qwen extraction, quote check, and value-in-quote check
-│   └── analyst.py                  Decimal reconciliation and per-clause leak attribution
+│   ├── analyst.py                  Decimal reconciliation, monthly minimum per billing month, variance classes
+│   └── findings.py                 The evidence gate: what is approvable and what needs a person
 ├── schemas/
 │   └── payloads.py                 The form the model must fill: six terms, each quoted
 ├── tools/
-│   ├── db_client.py                Idempotent upsert into detected_leaks
+│   ├── db_client.py                Audit runs and findings, through the database functions in sql/003
 │   ├── dossier.py                  Approval card, audit report and leak descriptions
 │   ├── notifier.py                 Telegram delivery: report first, then the card
 │   ├── ingest.py                   Reads any invoice export (CSV or Excel) into the Analyst's layout
 │   ├── documents.py                Reads contracts from PDF, Word, text or Markdown
 │   └── render_pdfs.py              Client uploads to PDF, with a folder watcher
 ├── n8n/
-│   └── telegram_approval_webhook.json   Approve / deny routing and the finance email
-├── tests/                          Both citation checks on the demo contract: python -m unittest discover tests
+│   └── telegram_approval_webhook.json   Run-scoped approve / deny and the finance email
+├── tests/                          python -m unittest discover tests (no Ollama, Supabase or Telegram needed)
 ├── sql/                            Ledger schema for a fresh Supabase project
 ├── demo_data/                      Synthetic contract, ERP export, rendered PDFs
 ├── generate_demo_data.py           Builds the demo with three planted leaks
@@ -368,7 +378,8 @@ Each file has exactly one job. When something breaks, you know where to look. Th
 | Invoice export, plus the column names and sample rows the intake shows the local model | **Stays on this machine** | Reading the client's layout |
 | Extracted terms and all calculations | **Stays on this machine** | Python `Decimal` |
 | Each finding: client, invoice, amount, clause quote, description | Your Supabase project | The system of record |
-| Approval card and the attached audit report (includes contract quotes) | The Telegram chat you configure | The human decision |
+| Approval card (amounts, months, section numbers) | The Telegram chat you configure | The human decision |
+| Line-by-line audit report (includes contract quotes) | **Stays on this machine** in `reports/` for client runs. Attached to Telegram only for the synthetic demo | Review |
 | Approved invoice list, total, reasons, approver | Finance, by email through n8n | The handoff |
 | Rendered client PDFs | **Stays on this machine** | Headless Chrome or Edge |
 
