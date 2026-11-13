@@ -65,8 +65,30 @@ alter table public.detected_leaks
   alter column finding_key    set not null,
   alter column variance_class set not null;
 
--- invoice_number stays as a readable column; it is no longer the identity.
-alter table public.detected_leaks drop constraint if exists detected_leaks_invoice_number_key;
+-- invoice_number stays as a readable column; it is no longer the identity. Drop any
+-- uniqueness on invoice_number alone, whatever it was named when the table was made.
+do $$
+declare c record;
+begin
+  for c in
+    select con.conname
+      from pg_constraint con
+     where con.conrelid = 'public.detected_leaks'::regclass and con.contype = 'u'
+       and con.conkey = array[(select attnum from pg_attribute
+                                where attrelid = 'public.detected_leaks'::regclass and attname = 'invoice_number')]
+  loop
+    execute format('alter table public.detected_leaks drop constraint %I', c.conname);
+  end loop;
+  for c in
+    select i.indexrelid::regclass::text as idx
+      from pg_index i
+     where i.indrelid = 'public.detected_leaks'::regclass and i.indisunique and not i.indisprimary
+       and i.indkey::text = (select attnum::text from pg_attribute
+                              where attrelid = 'public.detected_leaks'::regclass and attname = 'invoice_number')
+  loop
+    execute format('drop index %s', c.idx);
+  end loop;
+end $$;
 
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'detected_leaks_finding_unique') then
@@ -88,16 +110,24 @@ end $$;
 
 create index if not exists detected_leaks_run_status on public.detected_leaks (audit_run_id, status);
 
-create table if not exists public.finding_events (
-  id           bigint generated always as identity primary key,
-  finding_id   bigint      not null references public.detected_leaks (id),
-  audit_run_id uuid        references public.audit_runs (id),
-  from_status  text,
-  to_status    text        not null,
-  amount       numeric(12, 2) not null,
-  actor        text        not null,
-  at           timestamptz not null default now()
-);
+-- finding_id matches detected_leaks.id, whether that table was created with a bigint or a uuid id.
+do $$
+declare v_type text;
+begin
+  select format_type(atttypid, atttypmod) into v_type
+    from pg_attribute where attrelid = 'public.detected_leaks'::regclass and attname = 'id';
+  execute format($f$
+    create table if not exists public.finding_events (
+      id           bigint generated always as identity primary key,
+      finding_id   %s          not null references public.detected_leaks (id),
+      audit_run_id uuid        references public.audit_runs (id),
+      from_status  text,
+      to_status    text        not null,
+      amount       numeric(12, 2) not null,
+      actor        text        not null,
+      at           timestamptz not null default now()
+    )$f$, v_type);
+end $$;
 
 -- finding_events is the decision history: nobody edits or deletes it.
 create or replace function public.forbid_change() returns trigger language plpgsql as $$

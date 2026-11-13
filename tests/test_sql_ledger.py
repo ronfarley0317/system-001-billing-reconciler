@@ -43,7 +43,12 @@ def _as_db_user(cmd: list[str]) -> list[str]:
 
 @unittest.skipUnless(PG_BIN, "Postgres binaries not installed")
 class LedgerSQL(unittest.TestCase):
-    RUN = "11111111-1111-1111-1111-111111111111"
+    PORT = "54329"
+
+    @classmethod
+    def create_base_table(cls):
+        cls.psql(SQL / "001_create_detected_leaks.sql")
+        cls.psql(SQL / "002_add_leak_description.sql")
 
     @classmethod
     def setUpClass(cls):
@@ -53,11 +58,10 @@ class LedgerSQL(unittest.TestCase):
         subprocess.run(_as_db_user([f"{PG_BIN}/initdb", "-D", data, "-A", "trust", "-U", "postgres"]),
                        check=True, capture_output=True)
         subprocess.run(_as_db_user([f"{PG_BIN}/pg_ctl", "-D", data, "-l", os.path.join(cls.tmp, "log"), "-w",
-                                    "-o", f"-k {sock} -c listen_addresses='' -p 54329", "start"]),
+                                    "-o", f"-k {sock} -c listen_addresses='' -p {cls.PORT}", "start"]),
                        check=True, capture_output=True)
         cls.data, cls.sock = data, sock
-        cls.psql(SQL / "001_create_detected_leaks.sql")
-        cls.psql(SQL / "002_add_leak_description.sql")
+        cls.create_base_table()
         # Two legacy rows written by the old code, before 003 exists.
         cls.sql("insert into detected_leaks (client_name, invoice_number, calculated_arrears, status) values "
                 "('Apex Logistics Group, LLC', 'INV-1', 3000.00, 'APPROVED'), "
@@ -74,7 +78,7 @@ class LedgerSQL(unittest.TestCase):
 
     @classmethod
     def _psql(cls, args: list[str]) -> subprocess.CompletedProcess:
-        return subprocess.run(_as_db_user([f"{PG_BIN}/psql", "-h", cls.sock, "-p", "54329", "-U", "postgres",
+        return subprocess.run(_as_db_user([f"{PG_BIN}/psql", "-h", cls.sock, "-p", cls.PORT, "-U", "postgres",
                                            "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-qtA"] + args),
                               capture_output=True, text=True)
 
@@ -195,6 +199,31 @@ class LedgerSQL(unittest.TestCase):
         self.record(run, "period:2025-07", "100.00", status="REVIEW_REQUIRED")
         err = self.sql_fails(f"update detected_leaks set status = 'APPROVED' where audit_run_id = '{run}'")
         self.assertIn("only PENDING_APPROVAL can be approved", err)
+
+
+
+class LedgerSQLUuidTable(LedgerSQL):
+    """A detected_leaks table made by hand in Supabase: uuid ids and a differently named unique index."""
+    PORT = "54330"
+
+    @classmethod
+    def create_base_table(cls):
+        cls.sql("""
+            create table public.detected_leaks (
+              id uuid primary key default gen_random_uuid(),
+              client_name text not null,
+              invoice_number text not null,
+              calculated_arrears numeric(10, 2) not null,
+              contract_citation text,
+              leak_description text,
+              status text not null default 'PENDING_APPROVAL',
+              created_at timestamptz not null default now());
+            create unique index detected_leaks_invoice_uniq on public.detected_leaks (invoice_number);""")
+
+    def test_old_invoice_number_uniqueness_is_gone(self):
+        a, b = self.new_run("dup-a", "C"), self.new_run("dup-b", "C")
+        self.record(a, "period:2025-07")
+        self.record(b, "period:2025-07")  # same invoice_number 'INV' as row above; must not collide
 
 
 if __name__ == "__main__":
