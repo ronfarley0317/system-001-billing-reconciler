@@ -203,27 +203,41 @@ class LedgerSQL(unittest.TestCase):
 
 
 class LedgerSQLUuidTable(LedgerSQL):
-    """A detected_leaks table made by hand in Supabase: uuid ids and a differently named unique index."""
+    """Mirrors the live Supabase table (2026-11-12): uuid ids, nullable columns, constraint unique_invoice,
+    plus a legacy row with no client name or invoice number."""
     PORT = "54330"
 
     @classmethod
     def create_base_table(cls):
         cls.sql("""
+            create extension if not exists "uuid-ossp";
             create table public.detected_leaks (
-              id uuid primary key default gen_random_uuid(),
-              client_name text not null,
-              invoice_number text not null,
-              calculated_arrears numeric(10, 2) not null,
+              id uuid primary key default uuid_generate_v4(),
+              client_name text,
+              invoice_number text,
+              calculated_arrears numeric,
               contract_citation text,
+              status text default 'PENDING_APPROVAL',
+              created_at timestamptz default now(),
               leak_description text,
-              status text not null default 'PENDING_APPROVAL',
-              created_at timestamptz not null default now());
-            create unique index detected_leaks_invoice_uniq on public.detected_leaks (invoice_number);""")
+              constraint unique_invoice unique (invoice_number));
+            insert into public.detected_leaks (client_name, invoice_number, calculated_arrears)
+            values (null, null, 100.00);""")
 
     def test_old_invoice_number_uniqueness_is_gone(self):
         a, b = self.new_run("dup-a", "C"), self.new_run("dup-b", "C")
         self.record(a, "period:2025-07")
         self.record(b, "period:2025-07")  # same invoice_number 'INV' as row above; must not collide
+
+    def test_blank_legacy_row_backfilled(self):
+        self.assertEqual(self.sql("select client_id || '|' || contract_id from detected_leaks "
+                                  "where client_name is null"), "unknown-client|legacy")
+
+    def test_legacy_rows_kept_and_backfilled(self):
+        rows = self.sql("select invoice_number, status, client_id from detected_leaks "
+                        "where contract_id = 'legacy' and invoice_number is not null order by invoice_number")
+        self.assertEqual(rows.splitlines(), ["INV-1|APPROVED|apex-logistics-group-llc",
+                                             "INV-2|PENDING_APPROVAL|apex-logistics-group-llc"])
 
 
 if __name__ == "__main__":

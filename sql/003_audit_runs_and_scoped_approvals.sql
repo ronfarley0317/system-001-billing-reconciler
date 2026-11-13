@@ -52,9 +52,9 @@ alter table public.detected_leaks
   add column if not exists decided_by         text;
 
 update public.detected_leaks set
-  client_id          = coalesce(client_id, trim(both '-' from lower(regexp_replace(client_name, '[^a-zA-Z0-9]+', '-', 'g')))),
+  client_id          = coalesce(client_id, nullif(trim(both '-' from lower(regexp_replace(coalesce(client_name, ''), '[^a-zA-Z0-9]+', '-', 'g'))), ''), 'unknown-client'),
   contract_id        = coalesce(contract_id, 'legacy'),
-  finding_key        = coalesce(finding_key, 'legacy:' || invoice_number),
+  finding_key        = coalesce(finding_key, 'legacy:' || coalesce(invoice_number, id::text)),
   variance_class     = coalesce(variance_class, 'UNDERBILLED'),
   source_invoice_ids = coalesce(source_invoice_ids, invoice_number)
 where client_id is null or contract_id is null or finding_key is null or variance_class is null;
