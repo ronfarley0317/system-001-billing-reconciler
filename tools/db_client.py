@@ -3,6 +3,8 @@ rules (client scoping, decided findings stay decided, one run per card) are enfo
 by Postgres, not by whoever calls it.
 """
 
+from __future__ import annotations
+
 import os
 import re
 from dataclasses import dataclass
