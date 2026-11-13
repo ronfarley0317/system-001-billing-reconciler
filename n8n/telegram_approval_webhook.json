@@ -1,5 +1,5 @@
 {
-  "name": "Telegram Approval Webhook",
+  "name": "Telegram Approval Webhook (scoped to one audit run)",
   "nodes": [
     {
       "parameters": {
@@ -26,35 +26,16 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "a1f3c2d4-5555-4a7e-9b01-000000000005-c",
-              "leftValue": "={{ $json.callback_query.data }}",
-              "rightValue": "approve_claim",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "jsCode": "// The run id comes from the button the approver tapped, never from the card text.\nconst q = $json.callback_query || {};\nconst m = /^(approve|deny):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(q.data || '');\nreturn [{ json: {\n  valid: Boolean(m && q.from && Number.isInteger(q.from.id)),\n  decision: m ? (m[1] === 'approve' ? 'APPROVE' : 'DENY') : null,\n  run_id: m ? m[2] : null,\n  telegram_user_id: q.from ? q.from.id : null,\n  query_id: q.id || null,\n  chat_id: q.message && q.message.chat ? q.message.chat.id : null,\n} }];"
       },
-      "id": "a1f3c2d4-5555-4a7e-9b01-000000000005",
-      "name": "Approved?",
-      "type": "n8n-nodes-base.if",
+      "name": "Parse Button",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         220,
         100
-      ]
+      ],
+      "id": "parse-button"
     },
     {
       "parameters": {
@@ -66,9 +47,123 @@
           },
           "conditions": [
             {
-              "id": "a1f3c2d4-6666-4a7e-9b01-000000000006-c",
-              "leftValue": "={{ $json.callback_query.data }}",
-              "rightValue": "deny_claim",
+              "id": "valid-button?-c",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Valid Button?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ],
+      "id": "valid-button?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=REPLACE_WITH_SUPABASE_URL/rest/v1/rpc/decide_audit_run",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_run_id: $('Parse Button').item.json.run_id, p_decision: $('Parse Button').item.json.decision, p_telegram_user_id: $('Parse Button').item.json.telegram_user_id }) }}",
+        "options": {}
+      },
+      "name": "Decide in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      },
+      "id": "decide-in-supabase"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "decision-recorded?-c",
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Decision Recorded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "decision-recorded?"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Parse Button').item.json.query_id }}",
+        "additionalFields": {
+          "text": "={{ $('Decide in Supabase').item.json.decision === 'APPROVED' ? 'Approved.' : 'Denied.' }}"
+        }
+      },
+      "name": "Answer Recorded",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        -100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      },
+      "id": "answer-recorded"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "approved?-c",
+              "leftValue": "={{ $('Decide in Supabase').item.json.decision }}",
+              "rightValue": "APPROVED",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -79,278 +174,212 @@
         },
         "options": {}
       },
-      "id": "a1f3c2d4-6666-4a7e-9b01-000000000006",
-      "name": "Denied?",
+      "name": "Approved?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        440,
-        240
-      ]
+        1320,
+        -100
+      ],
+      "id": "approved?"
     },
     {
       "parameters": {
-        "resource": "row",
-        "operation": "update",
-        "tableId": "detected_leaks",
-        "filterType": "manual",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "status",
-              "condition": "eq",
-              "keyValue": "PENDING_APPROVAL"
-            },
-            {
-              "keyName": "client_name",
-              "condition": "eq",
-              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
-            }
-          ]
-        },
-        "dataToSend": "defineBelow",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "status",
-              "fieldValue": "APPROVED"
-            }
-          ]
+        "sendTo": "REPLACE_WITH_FINANCE_EMAIL",
+        "subject": "=APPROVED: Issue catch-up invoices for {{ $('Decide in Supabase').item.json.client_id }} ({{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }})",
+        "emailType": "text",
+        "message": "=Finance team,\n\nThe billing reconciliation for {{ $('Decide in Supabase').item.json.client_id }} (contract {{ $('Decide in Supabase').item.json.contract_id }}, audit run {{ $('Decide in Supabase').item.json.run_id }}) has been reviewed and approved.\n\nPlease issue catch-up invoices for the following under-billed months:\n\n{{ $('Decide in Supabase').item.json.rows.map(r => r.period + ' (' + r.invoices + '): $' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })).join('\\n') }}\n\nTotal approved: {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }} across {{ $('Decide in Supabase').item.json.count }} month(s).\n\nWhy each month was under-billed:\n{{ $('Decide in Supabase').item.json.rows.map(r => '- ' + r.why).join('\\n') }}\n\nOnly the findings in this audit run were approved. Each amount is tied to a verified clause in the signed contract, and the decision is recorded in the detected_leaks ledger and its finding_events history.\n\nApproved by: {{ $('Decide in Supabase').item.json.approver }}\nApproved at: {{ $now.toFormat('MMMM d, yyyy h:mm a ZZZZ') }}\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
+        "options": {
+          "appendAttribution": false
         }
       },
-      "id": "a1f3c2d4-2222-4a7e-9b01-000000000002",
-      "name": "Approve Pending Leaks",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "name": "Email Finance",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
       "position": [
-        660,
-        0
+        1540,
+        -200
       ],
-      "alwaysOutputData": true,
       "credentials": {
-        "supabaseApi": {
-          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "resource": "row",
-        "operation": "update",
-        "tableId": "detected_leaks",
-        "filterType": "manual",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "status",
-              "condition": "eq",
-              "keyValue": "PENDING_APPROVAL"
-            },
-            {
-              "keyName": "client_name",
-              "condition": "eq",
-              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
-            }
-          ]
-        },
-        "dataToSend": "defineBelow",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "status",
-              "fieldValue": "DENIED"
-            }
-          ]
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
         }
       },
-      "id": "a1f3c2d4-7777-4a7e-9b01-000000000007",
-      "name": "Deny Pending Leaks",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        660,
-        240
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "supabaseApi": {
-          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "resource": "callback",
-        "operation": "answerQuery",
-        "queryId": "={{ $('Telegram Trigger').item.json.callback_query.id }}",
-        "additionalFields": {
-          "text": "Ledger approved."
-        }
-      },
-      "id": "a1f3c2d4-3333-4a7e-9b01-000000000003",
-      "name": "Answer Approve",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1100,
-        0
-      ],
-      "executeOnce": true,
-      "credentials": {
-        "telegramApi": {
-          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "resource": "callback",
-        "operation": "answerQuery",
-        "queryId": "={{ $('Telegram Trigger').item.json.callback_query.id }}",
-        "additionalFields": {
-          "text": "Claim denied."
-        }
-      },
-      "id": "a1f3c2d4-8888-4a7e-9b01-000000000008",
-      "name": "Answer Deny",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        880,
-        240
-      ],
-      "executeOnce": true,
-      "credentials": {
-        "telegramApi": {
-          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
-          "name": "Telegram account"
-        }
-      }
+      "id": "email-finance"
     },
     {
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
-        "text": "=✅ Approved. All pending arrears for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} are now APPROVED in the ledger. Finance has been emailed to issue the invoices.",
+        "chatId": "={{ $('Parse Button').item.json.chat_id }}",
+        "text": "=✅ Approved {{ $('Decide in Supabase').item.json.count }} finding(s) for {{ $('Decide in Supabase').item.json.client_id }}, totaling {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}. Finance has been emailed. Only this audit run was affected.",
         "additionalFields": {
           "appendAttribution": false
         }
       },
-      "id": "a1f3c2d4-4444-4a7e-9b01-000000000004",
       "name": "Send Approval Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        -200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      },
+      "id": "send-approval-confirmation"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Parse Button').item.json.chat_id }}",
+        "text": "=❌ Denied {{ $('Decide in Supabase').item.json.count }} finding(s) for {{ $('Decide in Supabase').item.json.client_id }}. Nothing will be billed. Only this audit run was affected.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Denial Confirmation",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
         1540,
         0
       ],
-      "executeOnce": true,
       "credentials": {
         "telegramApi": {
           "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
           "name": "Telegram account"
         }
-      }
+      },
+      "id": "send-denial-confirmation"
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "sendMessage",
-        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
-        "text": "=❌ Denied. Pending arrears for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} are marked DENIED. Nothing will be billed.",
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Parse Button').item.json.query_id }}",
         "additionalFields": {
-          "appendAttribution": false
+          "text": "={{ $('Decide in Supabase').item.json.reason || 'Nothing changed.' }}",
+          "showAlert": true
         }
       },
-      "id": "a1f3c2d4-9999-4a7e-9b01-000000000009",
-      "name": "Send Denial Confirmation",
+      "name": "Answer Rejected",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
         1100,
-        240
+        100
       ],
-      "executeOnce": true,
       "credentials": {
         "telegramApi": {
           "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
           "name": "Telegram account"
         }
-      }
+      },
+      "id": "answer-rejected"
     },
     {
       "parameters": {
-        "sendTo": "REPLACE_WITH_FINANCE_EMAIL",
-        "subject": "=APPROVED: Issue catch-up invoices for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} ({{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Arrears Found:\\s*(\\S+)/)[1] }})",
-        "emailType": "text",
-        "message": "=Finance team,\n\nThe billing reconciliation for {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }} (contract {{ ($('Telegram Trigger').item.json.callback_query.message.text.match(/Contract:\\s*(.+)/) || [])[1] || 'n/a' }}) has been reviewed and approved.\n\nPlease issue catch-up invoices for the following under-billed periods:\n\n{{ $('Get Approved Leaks').all().map(i => i.json.invoice_number + ': $' + Number(i.json.calculated_arrears).toLocaleString('en-US', { minimumFractionDigits: 2 })).sort().join('\\n') }}\n\nTotal approved arrears: {{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Arrears Found:\\s*(\\S+)/)[1] }}\n\nWhy these were under-billed:\n{{ ($('Telegram Trigger').item.json.callback_query.message.text.match(/Why:\\n([\\s\\S]*?)\\n\\nContract citations/) || [])[1] || '' }}\n\nEach amount is tied to a verified clause in the signed contract and is recorded in the detected_leaks ledger with status APPROVED. The line-by-line audit report was attached to the approval card.\n\nApproved by: {{ $('Telegram Trigger').item.json.callback_query.from.first_name }}{{ $('Telegram Trigger').item.json.callback_query.from.username ? ' (@' + $('Telegram Trigger').item.json.callback_query.from.username + ')' : '' }}\nApproved at: {{ $now.toFormat('MMMM d, yyyy h:mm a ZZZZ') }}\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
-        "options": {
-          "appendAttribution": false
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Parse Button').item.json.query_id }}",
+        "additionalFields": {
+          "text": "This button is not valid. Nothing changed.",
+          "showAlert": true
         }
       },
-      "id": "a1f3c2d4-aaaa-4a7e-9b01-00000000000a",
-      "name": "Email Finance",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "name": "Answer Invalid Button",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
-        1320,
-        0
+        660,
+        240
       ],
-      "executeOnce": true,
       "credentials": {
-        "gmailOAuth2": {
-          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
-          "name": "Gmail account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "detected_leaks",
-        "returnAll": true,
-        "filterType": "manual",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "client_name",
-              "condition": "eq",
-              "keyValue": "={{ $('Telegram Trigger').item.json.callback_query.message.text.match(/Client:\\s*(.+)/)[1].trim() }}"
-            },
-            {
-              "keyName": "status",
-              "condition": "eq",
-              "keyValue": "APPROVED"
-            }
-          ]
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
         }
       },
-      "id": "a1f3c2d4-bbbb-4a7e-9b01-00000000000b",
-      "name": "Get Approved Leaks",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        880,
-        0
-      ],
-      "executeOnce": true,
-      "credentials": {
-        "supabaseApi": {
-          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
-          "name": "Supabase account"
-        }
-      }
+      "id": "answer-invalid-button"
     }
   ],
   "connections": {
     "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Button",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Button": {
+      "main": [
+        [
+          {
+            "node": "Valid Button?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Button?": {
+      "main": [
+        [
+          {
+            "node": "Decide in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Invalid Button",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Decision Recorded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Recorded?": {
+      "main": [
+        [
+          {
+            "node": "Answer Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Recorded": {
       "main": [
         [
           {
@@ -365,67 +394,11 @@
       "main": [
         [
           {
-            "node": "Approve Pending Leaks",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Denied?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Denied?": {
-      "main": [
-        [
-          {
-            "node": "Deny Pending Leaks",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
-    "Approve Pending Leaks": {
-      "main": [
-        [
-          {
-            "node": "Get Approved Leaks",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Answer Approve": {
-      "main": [
-        [
-          {
             "node": "Email Finance",
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Deny Pending Leaks": {
-      "main": [
-        [
-          {
-            "node": "Answer Deny",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Answer Deny": {
-      "main": [
+        ],
         [
           {
             "node": "Send Denial Confirmation",
@@ -440,17 +413,6 @@
         [
           {
             "node": "Send Approval Confirmation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Approved Leaks": {
-      "main": [
-        [
-          {
-            "node": "Answer Approve",
             "type": "main",
             "index": 0
           }

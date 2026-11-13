@@ -10,12 +10,16 @@ import html
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from agents.analyst import (
     LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, AuditReport, LineAudit,
 )
 from agents.scout import CitationCheck, ScoutResult
 from schemas.payloads import ExtractedContractTerms
+
+if TYPE_CHECKING:
+    from tools.db_client import OpenedRun
 
 LEAK_ORDER = (LEAK_PROMO, LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER)
 LEAK_TAG = {LEAK_PROMO: "PROMO", LEAK_ESCALATOR: "ESC", LEAK_FLOOR: "FLOOR", LEAK_OTHER: "VAR"}
@@ -126,16 +130,20 @@ def _period(report: AuditReport) -> str:
     return f"{_month(leaking[0])} to {_month(leaking[-1])}"
 
 
-def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_attached: bool) -> str:
+def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_attached: bool,
+              run: "OpenedRun | None" = None, review_count: int = 0) -> str:
     """Telegram card body (parse_mode=HTML).
 
-    n8n reads the plain-text lines "Client: ..." and "Historical Arrears Found: ..."
-    and the "Why:" block back out of this message, so keep those labels stable.
+    `report` should contain only the approvable periods, so every number on the card is
+    what an approval would actually cover. The text is for the person reading it: the
+    approval workflow identifies the run by the button's run id, never by this text.
     """
     e = html.escape
     leaking = report.leaking_lines
     verified = sum(c.verified for c in scout.citation_checks)
     in_quote = sum(c.value_in_quote for c in scout.citation_checks)
+    total = run.approvable_total if run is not None else report.total_arrears
+    reviews = run.review_count if run is not None else review_count
 
     parts = [
         "🚨 <b>REVENUE LEAK DETECTED</b>",
@@ -144,9 +152,9 @@ def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_
         f"<b>Client:</b> {e(leaking[0].customer_name)}",
         f"<b>Contract:</b> {e(contract_id)}",
         f"<b>Period:</b> {_period(report)}",
-        f"<b>Invoices under-billed:</b> {len(leaking)} of {len(report.lines)}",
+        f"<b>Invoices under-billed:</b> {len(leaking)}",
         "",
-        f"<b>Historical Arrears Found:</b> {usd(report.total_arrears)}",
+        f"<b>Historical Arrears Found:</b> {usd(total)}",
         "",
         "<b>Why:</b>",
     ]
@@ -159,8 +167,10 @@ def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_
         f"<b>Contract citations:</b> {verified}/{len(scout.citation_checks)} verified against source",
         f"<b>Extracted values:</b> {in_quote}/{len(scout.citation_checks)} found in their own quote",
     ]
-    if not scout.integrity_ok:
-        parts.append("⚠️ <b>Review the contract before approving.</b> At least one check failed.")
+    if reviews:
+        parts.append(f"⚠️ <b>{reviews} more item(s) need review</b> and are not part of this approval.")
+    if run is not None:
+        parts.append(f"<b>Audit run:</b> <code>{e(run.run_id[:8])}</code> (approves only this run)")
     if report_attached:
         parts.append("📄 Full line-by-line report attached above.")
     return "\n".join(parts)
