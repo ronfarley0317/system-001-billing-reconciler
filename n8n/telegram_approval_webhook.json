@@ -450,7 +450,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// One shape for both paths: a fresh approval or a resend after a failed email.\nreturn [{ json: $input.first().json }];"
+        "jsCode": "// Approval path: the decision returned by Supabase. Resend path: the payload fetched for the resend.\nconst fromResend = $('Get Finance Payload').isExecuted;\nconst p = fromResend ? $('Get Finance Payload').first().json : $('Decide in Supabase').first().json;\n// Never send finance an empty email.\nif (!p || p.ok !== true || !p.run_id || !Array.isArray(p.rows) || p.rows.length === 0) {\n  throw new Error('No approved findings to send to finance. Nothing was emailed.');\n}\nreturn [{ json: p }];"
       },
       "name": "Finance Payload",
       "type": "n8n-nodes-base.code",

@@ -43,6 +43,13 @@ class ApprovalWorkflow(unittest.TestCase):
         self.assertEqual(parents("Resend?"), [("Valid Button?", 0)])
         self.assertTrue(NODES["Get Finance Payload"]["parameters"]["url"].endswith("/rpc/finance_payload"))
 
+    def test_finance_payload_reads_the_decision_not_its_input(self):
+        code = NODES["Finance Payload"]["parameters"]["jsCode"]
+        self.assertIn("$('Decide in Supabase')", code)
+        self.assertIn("$('Get Finance Payload')", code)
+        self.assertNotIn("$input", code)  # the input on the approval path is the Telegram answer, not the decision
+        self.assertIn("throw new Error", code)  # an empty payload stops the run before Gmail
+
     def test_failed_email_alerts_with_a_resend_button_and_is_not_marked_sent(self):
         self.assertEqual(NODES["Email Finance"].get("onError"), "continueErrorOutput")
         self.assertEqual(branches("Email Finance"), [["Mark Finance Notified"], ["Alert Email Failed"]])
