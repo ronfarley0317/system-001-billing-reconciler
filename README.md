@@ -267,7 +267,7 @@ cp .env.example .env               # Windows: copy .env.example .env
 
 ### 4. Create the ledger
 
-In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql), [`sql/003_audit_runs_and_scoped_approvals.sql`](sql/003_audit_runs_and_scoped_approvals.sql), then [`sql/004_finding_breakdown_for_finance_email.sql`](sql/004_finding_breakdown_for_finance_email.sql). Each keeps existing rows.
+In the Supabase SQL editor, run [`sql/001_create_detected_leaks.sql`](sql/001_create_detected_leaks.sql), [`sql/002_add_leak_description.sql`](sql/002_add_leak_description.sql), [`sql/003_audit_runs_and_scoped_approvals.sql`](sql/003_audit_runs_and_scoped_approvals.sql), [`sql/004_finding_breakdown_for_finance_email.sql`](sql/004_finding_breakdown_for_finance_email.sql), then [`sql/005_frozen_decisions_fingerprint_notify_purge.sql`](sql/005_frozen_decisions_fingerprint_notify_purge.sql). Each keeps existing rows.
 
 Then add yourself as an approver (your Telegram user id, from @userinfobot):
 
@@ -302,6 +302,8 @@ clients/acme/
 ```bash
 python run_demo.py --client acme
 ```
+
+The first run creates `clients/acme/client.json` with the client's permanent ledger id. Keep it with their files: findings are keyed by that id, so renaming the company or adding a second client with the same name can never mix their findings. With `--contract`/`--invoices` instead, pass `--client-id`.
 
 The first time, the intake shows how it read the export and asks you to check it:
 
@@ -390,6 +392,8 @@ The contract is never sent to an AI provider. What leaves the machine is the min
 ## Scope
 
 - **Six pricing terms are extracted:** base rate, promo rate, promo expiry, annual escalator, escalator start date and monthly minimum. Other clause types need a field in `schemas/payloads.py` and a rule in `agents/analyst.py`.
+- **Anything else is held, not guessed.** Before any math is approved, the contract text is scanned in plain code for pricing the engine does not model (CPI or index increases, tiers, proration, amendments, credits, overages, surcharges, caps, true-ups, non-monthly billing), and the model lists any other pricing clause it saw. Either one sends the whole run to review (`agents/coverage.py`).
+- **End of engagement:** `python tools/purge_client.py <client_id>` deletes that client's findings, runs and history after a typed confirmation, and keeps a receipt with no client data.
 - **One contract and one ERP export per run.** Pass them with `--client` or `--contract`/`--invoices`; with neither, the demo data runs.
 - **Contracts can be PDF, Word, text or Markdown.** A scanned PDF with no text layer needs OCR first; the tool says so when that's the case.
 - **All numbers in this README come from the synthetic benchmark dataset.**

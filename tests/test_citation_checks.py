@@ -72,8 +72,20 @@ class ValueMustBeInItsQuote(unittest.TestCase):
         self.assertTrue(value_in_quote(d, "expires on 06/30/2025"))
         self.assertFalse(value_in_quote(d, "expires on June 3, 2025"))
 
-    def test_words_only_value_is_flagged_not_guessed(self):
-        self.assertFalse(value_in_quote(Decimal("5.0"), "increase by five percent each year"))
+    def test_number_words_count_only_with_an_explicit_unit(self):
+        self.assertTrue(value_in_quote(Decimal("5.0"), "increase by five percent each year"))
+        self.assertTrue(value_in_quote(Decimal("30"), "payment within thirty days"))
+        self.assertTrue(value_in_quote(Decimal("12000"), "a minimum of twelve thousand dollars per month"))
+        self.assertFalse(value_in_quote(Decimal("30"), "thirty seats"))
+        self.assertFalse(value_in_quote(Decimal("5"), "an increase of a few percent each year"))
+        self.assertFalse(value_in_quote(Decimal("3.5"), "three and one-half percent"))  # fractions go to review
+
+    def test_words_and_digits_must_agree(self):
+        self.assertTrue(value_in_quote(Decimal("5.0"), "increase by five percent (5.0%) over the rate"))
+        self.assertTrue(value_in_quote(Decimal("30"), "net thirty (30) days"))
+        self.assertFalse(value_in_quote(Decimal("50.0"), "increase by five percent (50.0%) over the rate"))
+        self.assertFalse(value_in_quote(Decimal("10000.00"),
+                                        "a minimum of twelve thousand dollars ($10,000.00) per month"))
 
     def test_missing_value_is_flagged(self):
         self.assertFalse(value_in_quote(None, MINIMUM))

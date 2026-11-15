@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      # uv installs any Python version on any runner (the newest runners no longer ship 3.9).
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Python and dependencies
+        run: |
+          uv venv -p ${{ matrix.python }} .venv
+          uv pip install -p .venv -r requirements.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Make sure Postgres binaries are present (the SQL tests start a throwaway cluster)
+        run: ls /usr/lib/postgresql/*/bin/initdb || (sudo apt-get update && sudo apt-get install -y postgresql)
+      - name: Run every test; the database tests must run, not skip
+        env:
+          REQUIRE_POSTGRES: "1"
+        run: python -m unittest discover tests -v

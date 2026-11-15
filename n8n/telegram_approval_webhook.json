@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// The run id comes from the button the approver tapped, never from the card text.\nconst q = $json.callback_query || {};\nconst m = /^(approve|deny):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(q.data || '');\nreturn [{ json: {\n  valid: Boolean(m && q.from && Number.isInteger(q.from.id)),\n  decision: m ? (m[1] === 'approve' ? 'APPROVE' : 'DENY') : null,\n  run_id: m ? m[2] : null,\n  telegram_user_id: q.from ? q.from.id : null,\n  query_id: q.id || null,\n  chat_id: q.message && q.message.chat ? q.message.chat.id : null,\n} }];"
+        "jsCode": "// The run id comes from the button the approver tapped, never from the card text.\nconst q = $json.callback_query || {};\nconst m = /^(approve|deny|resend):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(q.data || '');\nreturn [{ json: {\n  valid: Boolean(m && q.from && Number.isInteger(q.from.id)),\n  action: m ? m[1].toUpperCase() : null,\n  decision: m && m[1] !== 'resend' ? (m[1] === 'approve' ? 'APPROVE' : 'DENY') : null,\n  run_id: m ? m[2] : null,\n  telegram_user_id: q.from ? q.from.id : null,\n  query_id: q.id || null,\n  chat_id: q.message && q.message.chat ? q.message.chat.id : null,\n} }];"
       },
       "name": "Parse Button",
       "type": "n8n-nodes-base.code",
@@ -186,9 +186,9 @@
     {
       "parameters": {
         "sendTo": "REPLACE_WITH_FINANCE_EMAIL",
-        "subject": "=Approved: catch-up invoices for {{ $('Decide in Supabase').item.json.client_name }} ({{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }})",
+        "subject": "=Approved: catch-up invoices for {{ $('Finance Payload').item.json.client_name }} ({{ '$' + Number($('Finance Payload').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }})",
         "emailType": "text",
-        "message": "=Finance team,\n\nPlease issue catch-up invoices for {{ $('Decide in Supabase').item.json.client_name }} (contract {{ $('Decide in Supabase').item.json.contract_id }}).\n\n{{ $('Decide in Supabase').item.json.rows.map(r => r.period + '   ' + r.invoices + '   ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\nTotal: {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} across {{ $('Decide in Supabase').item.json.count }} month(s)\n\nWhy, from the signed contract:\n{{ $('Decide in Supabase').item.json.reasons.map(r => '- ' + r.reason + ': ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\n\nApproved by {{ $('Decide in Supabase').item.json.approver }}, {{ $now.toFormat('MMM d, yyyy h:mm a ZZZZ') }}. Audit run {{ String($('Decide in Supabase').item.json.run_id).slice(0, 8) }}.\n\nEach amount is tied to a verified clause in the signed contract. Month-by-month detail is in the ledger.\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
+        "message": "=Finance team,\n\nPlease issue catch-up invoices for {{ $('Finance Payload').item.json.client_name }} (contract {{ $('Finance Payload').item.json.contract_id }}).\n\n{{ $('Finance Payload').item.json.rows.map(r => r.period + '   ' + r.invoices + '   ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\nTotal: {{ '$' + Number($('Finance Payload').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} across {{ $('Finance Payload').item.json.count }} month(s)\n\nWhy, from the signed contract:\n{{ $('Finance Payload').item.json.reasons.map(r => '- ' + r.reason + ': ' + '$' + Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join('\\n') }}\n\nApproved by {{ $('Finance Payload').item.json.approver }}, {{ $now.toFormat('MMM d, yyyy h:mm a ZZZZ') }}. Audit run {{ String($('Finance Payload').item.json.run_id).slice(0, 8) }}.\n\nEach amount is tied to a verified clause in the signed contract. Month-by-month detail is in the ledger.\n\nSent automatically by System #001: Deterministic Billing Reconciler.",
         "options": {
           "appendAttribution": false
         }
@@ -197,8 +197,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        1540,
-        -200
+        1760,
+        -100
       ],
       "credentials": {
         "gmailOAuth2": {
@@ -206,14 +206,15 @@
           "name": "Gmail account"
         }
       },
-      "id": "email-finance"
+      "id": "email-finance",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Parse Button').item.json.chat_id }}",
-        "text": "=✅ Approved {{ $('Decide in Supabase').item.json.count }} month(s) for {{ $('Decide in Supabase').item.json.client_name }}, totaling {{ '$' + Number($('Decide in Supabase').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}. Finance has been emailed. Only this audit run was affected.",
+        "text": "=✅ Approved {{ $('Finance Payload').item.json.count }} month(s) for {{ $('Finance Payload').item.json.client_name }}, totaling {{ '$' + Number($('Finance Payload').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}. Finance has been emailed. Only this audit run was affected.",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -222,7 +223,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1760,
+        2200,
         -200
       ],
       "credentials": {
@@ -307,6 +308,226 @@
         }
       },
       "id": "answer-invalid-button"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "resend-c",
+              "leftValue": "={{ $('Parse Button').item.json.action }}",
+              "rightValue": "RESEND",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Resend?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        260
+      ],
+      "id": "resend"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=REPLACE_WITH_SUPABASE_URL/rest/v1/rpc/finance_payload",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_run_id: $('Parse Button').item.json.run_id, p_telegram_user_id: $('Parse Button').item.json.telegram_user_id }) }}",
+        "options": {}
+      },
+      "name": "Get Finance Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        360
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      },
+      "id": "get-finance-payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "payload-ready-c",
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Payload Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        360
+      ],
+      "id": "payload-ready"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Parse Button').item.json.query_id }}",
+        "additionalFields": {
+          "text": "Resending to finance."
+        }
+      },
+      "name": "Answer Resending",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      },
+      "id": "answer-resending"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $('Parse Button').item.json.query_id }}",
+        "additionalFields": {
+          "text": "={{ $('Get Finance Payload').item.json.reason || 'Nothing sent.' }}",
+          "showAlert": true
+        }
+      },
+      "name": "Answer Resend Refused",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        440
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      },
+      "id": "answer-resend-refused"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Approval path: the decision returned by Supabase. Resend path: the payload fetched for the resend.\nconst fromResend = $('Get Finance Payload').isExecuted;\nconst p = fromResend ? $('Get Finance Payload').first().json : $('Decide in Supabase').first().json;\n// Never send finance an empty email.\nif (!p || p.ok !== true || !p.run_id || !Array.isArray(p.rows) || p.rows.length === 0) {\n  throw new Error('No approved findings to send to finance. Nothing was emailed.');\n}\nreturn [{ json: p }];"
+      },
+      "name": "Finance Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -100
+      ],
+      "id": "finance-payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=REPLACE_WITH_SUPABASE_URL/rest/v1/rpc/mark_finance_notified",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_run_id: $('Finance Payload').item.json.run_id }) }}",
+        "options": {}
+      },
+      "name": "Mark Finance Notified",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      },
+      "id": "mark-finance-notified"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Parse Button').item.json.chat_id }}",
+        "text": "=⚠️ The approval for {{ $('Finance Payload').item.json.client_name }} is recorded ({{ '$' + Number($('Finance Payload').item.json.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}), but the finance email failed. Nothing was sent to finance. Tap Resend to try again.",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📧 Resend to finance",
+                    "additionalFields": {
+                      "callback_data": "=resend:{{ $('Finance Payload').item.json.run_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Alert Email Failed",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      },
+      "id": "alert-email-failed"
     }
   ],
   "connections": {
@@ -336,7 +557,7 @@
       "main": [
         [
           {
-            "node": "Decide in Supabase",
+            "node": "Resend?",
             "type": "main",
             "index": 0
           }
@@ -394,7 +615,7 @@
       "main": [
         [
           {
-            "node": "Email Finance",
+            "node": "Finance Payload",
             "type": "main",
             "index": 0
           }
@@ -409,6 +630,93 @@
       ]
     },
     "Email Finance": {
+      "main": [
+        [
+          {
+            "node": "Mark Finance Notified",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Email Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resend?": {
+      "main": [
+        [
+          {
+            "node": "Get Finance Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Decide in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Finance Payload": {
+      "main": [
+        [
+          {
+            "node": "Payload Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Ready?": {
+      "main": [
+        [
+          {
+            "node": "Answer Resending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Resend Refused",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Resending": {
+      "main": [
+        [
+          {
+            "node": "Finance Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finance Payload": {
+      "main": [
+        [
+          {
+            "node": "Email Finance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Finance Notified": {
       "main": [
         [
           {

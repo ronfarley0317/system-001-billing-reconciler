@@ -44,6 +44,7 @@ class OpenedRun:
     approvable_total: Decimal
     approvable_count: int
     review_count: int
+    fingerprint: str = ""  # SHA-256 of exactly the findings on the card; checked again at decision time
 
 
 def _money(value: Decimal) -> str:
@@ -86,6 +87,7 @@ def open_audit_run(run_id: str, sb: Client | None = None) -> OpenedRun:
         approvable_total=Decimal(str(data["approvable_total"])),
         approvable_count=int(data["approvable_count"]),
         review_count=int(data["review_count"]),
+        fingerprint=str(data.get("fingerprint") or ""),
     )
 
 
@@ -100,3 +102,9 @@ def record_audit(client_id: str, contract_id: str, findings: list[Finding],
     run_id = start_audit_run(client_id, contract_id, sb)
     stored = {f.key: record_finding(run_id, f, sb) for f in findings}
     return open_audit_run(run_id, sb), stored
+
+
+def purge_client(client_id: str, confirmation: str, sb: Client | None = None) -> dict:
+    """End of engagement: delete one client's findings, runs and history. Needs 'PURGE <client_id>'."""
+    sb = sb or get_supabase_client()
+    return sb.rpc("purge_client", {"p_client_id": client_id, "p_confirm": confirmation}).execute().data
