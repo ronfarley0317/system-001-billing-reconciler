@@ -31,6 +31,10 @@ Rules:
 - Use null for any term the contract does not state.
 - For EVERY non-null field, add a citation whose `quote` is one exact sentence
   copied character-for-character from the contract.
+- In `other_pricing_terms`, list any other clause that changes the recurring
+  amount billed and does not fit the fields above. Do not interpret it; just name
+  it. Do not list payment terms, due dates, late charges, interest or taxes. If
+  there are none, return an empty list.
 """
 
 
@@ -99,14 +103,66 @@ def _date_forms(d: date) -> set[str]:
     }
 
 
+_UNITS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+          "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+          "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+_SCALES = {"hundred": 100, "thousand": 1_000, "million": 1_000_000}
+_NUMBER_WORD = "|".join(sorted([*_UNITS, *_TENS, *_SCALES], key=len, reverse=True))
+_WORD_RUN = rf"(?:{_NUMBER_WORD})(?:[\s-]+(?:and[\s-]+)?(?:{_NUMBER_WORD}))*"
+# A number written in words only counts when an explicit unit follows it ("five percent",
+# "thirty days", "twelve thousand dollars"). Vague phrases ("a few days") never match.
+_WORDS_WITH_UNIT = re.compile(rf"\b({_WORD_RUN})\s+(?:\([^)]*\)\s*)?(percent|per cent|days?|months?|years?|dollars?)\b")
+# Contracts often write both forms: "five percent (5.0%)", "thirty (30) days". They must agree.
+_WORDS_THEN_DIGITS = re.compile(rf"\b({_WORD_RUN})\s*(?:percent|per cent|dollars?)?\s*\(\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*%?\s*\)")
+
+
+def _words_to_decimal(phrase: str) -> Decimal | None:
+    total, current = 0, 0
+    for word in re.split(r"[\s-]+", phrase):
+        if word == "and" or not word:
+            continue
+        if word in _UNITS:
+            current += _UNITS[word]
+        elif word in _TENS:
+            current += _TENS[word]
+        elif word == "hundred":
+            current = (current or 1) * 100
+        elif word in _SCALES:
+            total += (current or 1) * _SCALES[word]
+            current = 0
+        else:
+            return None
+    return Decimal(total + current)
+
+
+def _worded_numbers(text: str) -> set[Decimal]:
+    found = set()
+    for words, _unit in _WORDS_WITH_UNIT.findall(text):
+        value = _words_to_decimal(words)
+        if value is not None:
+            found.add(value)
+    return found
+
+
+def _forms_disagree(text: str) -> bool:
+    """True when a quote writes a number both ways and the two forms are different numbers."""
+    for words, digits in _WORDS_THEN_DIGITS.findall(text):
+        worded = _words_to_decimal(words)
+        if worded is not None and worded != Decimal(digits.replace(",", "")):
+            return True
+    return False
+
+
 def value_in_quote(value: object, quote: str) -> bool:
     """Is the value the model extracted actually written inside the quote it cited?
 
     Catches the failure the quote check cannot: a real sentence cited with a misread
     number (e.g. the clause says 5.0% but the field says 50.0). Numbers are compared
-    as Decimal, so "$12,000.00", "12,000" and "12000.00" all match 12000.00. Values
-    written only in words ("five percent") do not match; that is flagged for review
-    on purpose rather than guessed.
+    as Decimal, so "$12,000.00", "12,000" and "12000.00" all match 12000.00. A value
+    written only in words matches when an explicit unit follows it ("five percent",
+    "thirty days"); vague phrases do not. When the quote writes a number both ways,
+    "five percent (5.0%)", the two forms must agree or the check fails.
     """
     if value is None:
         return False
@@ -114,7 +170,9 @@ def value_in_quote(value: object, quote: str) -> bool:
     if isinstance(value, date):
         return any(form in text for form in _date_forms(value))
     if isinstance(value, Decimal):
-        return value in _numbers_in(text)
+        if _forms_disagree(text):
+            return False
+        return value in _numbers_in(text) or value in _worded_numbers(text)
     return _normalise(str(value)) in text
 
 

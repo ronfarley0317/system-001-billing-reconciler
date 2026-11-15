@@ -102,3 +102,12 @@ class ExtractedContractTerms(BaseModel):
     verbatim_citations: list[VerbatimCitation] = Field(
         description="One exact quote from the contract for every non-null field above."
     )
+    other_pricing_terms: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Any other clause that changes what gets billed and is not one of the fields above "
+            "(for example CPI or index increases, tiers, proration, credits, overages, surcharges, "
+            "caps, true-ups, amendments, non-monthly billing). One short phrase each, quoted from "
+            "the contract. Empty list if there are none."
+        ),
+    )

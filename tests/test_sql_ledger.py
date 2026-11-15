@@ -41,7 +41,8 @@ def _as_db_user(cmd: list[str]) -> list[str]:
     return cmd
 
 
-@unittest.skipUnless(PG_BIN, "Postgres binaries not installed")
+# In CI (REQUIRE_POSTGRES=1) a missing Postgres is a failure, never a silent skip.
+@unittest.skipUnless(PG_BIN or os.environ.get("REQUIRE_POSTGRES"), "Postgres binaries not installed")
 class LedgerSQL(unittest.TestCase):
     PORT = "54329"
 
@@ -52,6 +53,8 @@ class LedgerSQL(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not PG_BIN:
+            raise RuntimeError("REQUIRE_POSTGRES is set but no Postgres binaries were found")
         cls.tmp = tempfile.mkdtemp(prefix="sys001-pg-")
         os.chmod(cls.tmp, 0o777)
         data, sock = os.path.join(cls.tmp, "data"), cls.tmp
@@ -70,6 +73,8 @@ class LedgerSQL(unittest.TestCase):
         cls.psql(SQL / "003_audit_runs_and_scoped_approvals.sql")  # running it twice must be safe
         cls.psql(SQL / "004_finding_breakdown_for_finance_email.sql")
         cls.psql(SQL / "004_finding_breakdown_for_finance_email.sql")
+        cls.psql(SQL / "005_frozen_decisions_fingerprint_notify_purge.sql")
+        cls.psql(SQL / "005_frozen_decisions_fingerprint_notify_purge.sql")
         cls.sql("insert into authorized_approvers values (42, 'Ron', true)")
 
     @classmethod
@@ -203,6 +208,64 @@ class LedgerSQL(unittest.TestCase):
         err = self.sql_fails("update detected_leaks set calculated_arrears = 1 where finding_key = 'legacy:INV-1'")
         self.assertIn("immutable", err)
         self.assertIn("cannot be deleted", self.sql_fails("delete from detected_leaks where finding_key = 'legacy:INV-1'"))
+
+    def test_every_column_of_a_decision_is_frozen(self):
+        run = self.new_run("frozen", "C-FROZEN")
+        self.record(run, "period:2025-07")
+        self.sql(f"select open_audit_run('{run}')")
+        self.assertTrue(self.decide(run)["ok"])
+        for change in ("contract_citation = 'edited'", "leak_description = 'edited'",
+                       "leak_breakdown = '{}'::jsonb", "source_invoice_ids = 'X'", "client_name = 'Other'"):
+            with self.subTest(change=change):
+                err = self.sql_fails(f"update detected_leaks set {change} where audit_run_id = '{run}'")
+                self.assertIn("immutable", err)
+
+    def test_swapped_evidence_with_the_same_total_is_refused(self):
+        run = self.new_run("print", "C-PRINT")
+        self.record(run, "period:2025-07")
+        opened = json.loads(self.sql(f"select open_audit_run('{run}')"))
+        self.assertEqual(len(opened["fingerprint"]), 64)
+        self.sql(f"update detected_leaks set contract_citation = 'a different clause' where audit_run_id = '{run}'")
+        result = self.decide(run)
+        self.assertFalse(result["ok"])
+        self.assertIn("changed after this card", result["reason"])
+
+    def test_finance_notified_once_and_resend_rules(self):
+        run = self.new_run("notify", "C-NOTIFY")
+        self.record(run, "period:2025-07", breakdown={"Promo ended": "3000.00"})
+        self.sql(f"select open_audit_run('{run}')")
+        self.assertFalse(json.loads(self.sql(f"select finance_payload('{run}', 42)"))["ok"])  # not approved yet
+        self.assertTrue(self.decide(run)["ok"])
+        self.assertFalse(json.loads(self.sql(f"select finance_payload('{run}', 999)"))["ok"])  # stranger
+        payload = json.loads(self.sql(f"select finance_payload('{run}', 42)"))
+        self.assertTrue(payload["ok"])
+        self.assertEqual((payload["total"], payload["approver"], payload["client_name"]), ("3000.00", "Ron", "Apex"))
+        self.assertEqual(payload["reasons"], [{"reason": "Promo ended", "amount": "3000.00"}])
+        self.assertEqual(self.sql(f"select mark_finance_notified('{run}')"), "t")
+        self.assertEqual(self.sql(f"select mark_finance_notified('{run}')"), "f")
+        again = json.loads(self.sql(f"select finance_payload('{run}', 42)"))
+        self.assertFalse(again["ok"])
+        self.assertIn("already emailed", again["reason"])
+
+    def test_purge_removes_one_client_and_keeps_a_receipt(self):
+        keep = self.new_run("keeper", "C-P")
+        self.record(keep, "period:2025-07")
+        gone = self.new_run("leaver", "C-P")
+        self.record(gone, "period:2025-07")
+        self.record(gone, "period:2025-08")
+        self.sql(f"select open_audit_run('{gone}')")
+        self.assertTrue(self.decide(gone)["ok"])  # decided rows must go too
+
+        self.assertIn("PURGE leaver", self.sql_fails("select purge_client('leaver', 'yes')"))
+        result = json.loads(self.sql("select purge_client('leaver', 'PURGE leaver')"))
+        self.assertEqual((result["runs_deleted"], result["findings_deleted"]), (1, 2))
+        self.assertGreaterEqual(result["events_deleted"], 4)
+        self.assertEqual(self.sql("select count(*) from detected_leaks where client_id = 'leaver'"), "0")
+        self.assertEqual(self.sql("select count(*) from audit_runs where client_id = 'leaver'"), "0")
+        self.assertEqual(self.sql("select count(*) from detected_leaks where client_id = 'keeper'"), "1")
+        self.assertEqual(self.sql("select findings_deleted from client_purges where client_id = 'leaver'"), "2")
+        # Outside a purge the history is still append-only.
+        self.assertIn("append-only", self.sql_fails("delete from finding_events"))
 
     def test_events_are_append_only(self):
         self.assertIn("append-only", self.sql_fails("delete from finding_events"))

@@ -162,3 +162,50 @@ class TelegramCard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientIds(unittest.TestCase):
+    def test_created_once_then_reused(self):
+        import tempfile
+        from pathlib import Path
+        from tools.client_config import load_or_create_client_id
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "Acme Rentals"
+            folder.mkdir()
+            first, created = load_or_create_client_id(folder)
+            second, created_again = load_or_create_client_id(folder)
+            self.assertTrue(created)
+            self.assertFalse(created_again)
+            self.assertEqual(first, second)
+            self.assertRegex(first, r"^acme-rentals-[0-9a-f]{6}$")
+
+    def test_two_clients_with_the_same_name_get_different_ids(self):
+        import tempfile
+        from pathlib import Path
+        from tools.client_config import load_or_create_client_id
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            (Path(a) / "Acme").mkdir()
+            (Path(b) / "Acme").mkdir()
+            self.assertNotEqual(load_or_create_client_id(Path(a) / "Acme")[0],
+                                load_or_create_client_id(Path(b) / "Acme")[0])
+
+    def test_a_real_contract_without_an_id_writes_nothing(self):
+        from pathlib import Path
+        args = ("run_demo.py", "--contract", "demo_data/apex_contract_2025.md",
+                "--invoices", "demo_data/erp_invoices_export.csv")
+        code, rec, send = Pipeline().run_main(lambda *a: None, argv=args)
+        self.assertEqual(code, 1)
+        rec.assert_not_called()
+        send.assert_not_called()
+
+
+class Fingerprint(unittest.TestCase):
+    def test_card_shows_the_fingerprint(self):
+        from agents.analyst import reconcile
+        from agents.findings import approvable_view, build_findings
+        from tests.fixtures import DEMO_CSV
+        from tools.dossier import card_html
+        report = reconcile(terms(), DEMO_CSV)
+        view = approvable_view(report, build_findings(report, scout()))
+        run = OpenedRun("11111111-2222-3333-4444-555555555555", D("37250.00"), 11, 0, "ab" * 32)
+        self.assertIn("ababababab", card_html(view, scout(), "C1", False, run=run))

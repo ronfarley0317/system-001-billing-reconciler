@@ -171,6 +171,8 @@ def card_html(report: AuditReport, scout: ScoutResult, contract_id: str, report_
         parts.append(f"⚠️ <b>{reviews} more item(s) need review</b> and are not part of this approval.")
     if run is not None:
         parts.append(f"<b>Audit run:</b> <code>{e(run.run_id[:8])}</code> (approves only this run)")
+        if run.fingerprint:
+            parts.append(f"<b>Fingerprint:</b> <code>{e(run.fingerprint[:12])}</code> (approval is refused if any finding changes)")
     if report_attached:
         parts.append("📄 Full line-by-line report attached above.")
     return "\n".join(parts)

@@ -91,3 +91,41 @@ run by Ron on one contract. Revisit after the first paid diagnostic.
 - Telegram chats are not end-to-end encrypted. The card carries amounts and section numbers.
 - Supabase backups and a retention rule for client findings (the 30-day client-data rule) are
   not set up.
+
+
+---
+
+# Before the first client (branch `fix/before-first-client`, 2026-11-14)
+
+Follow-up to an outside review (Codex) and a Reddit suggestion. Same scope rule: only what a
+real client contract needs.
+
+| Change | Where | Why |
+|:--|:--|:--|
+| Fail-closed coverage scan | `agents/coverage.py`, `agents/findings.py`, `schemas/payloads.py` | A contract with CPI increases, tiers, proration, amendments, credits, overages, surcharges, caps, true-ups or non-monthly billing still yields the six terms, and the math would run on an incomplete model. Plain-code scan of the contract text plus the model's `other_pricing_terms`; any hit holds every finding. Payment terms, late charges and taxes are ignored. |
+| Number words | `agents/scout.py` | "five percent" and "thirty days" now match their values; vague phrases do not. When a quote writes both forms, "five percent (5.0%)", they must agree. |
+| Decisions frozen whole | `sql/005` | 003 locked status and amount only. Now no column of an approved or denied row can change. |
+| Card fingerprint | `sql/005`, `tools/db_client.py`, `tools/dossier.py` | Count and total could match after findings were swapped. The card now carries a SHA-256 of exactly its findings; the decision is refused if it no longer matches. |
+| Finance email recovery | `sql/005`, n8n workflow | A failed email used to leave an approved run with no email and no retry. Now: success is recorded (`finance_notified_at`); failure posts a Telegram alert with a Resend button; a run can be emailed only once. |
+| Permanent client ids | `tools/client_config.py`, `run_demo.py` | Ids came from company names. Now created once per client folder and stored in `client.json`. |
+| Client purge | `sql/005`, `tools/purge_client.py` | Decided findings are undeletable by design; the engagement-end promise needs one controlled way out. Typed confirmation; receipt kept with no client data. |
+| CI | `.github/workflows/tests.yml` | Every push runs all tests on Python 3.9 and 3.12 with Postgres required, so database tests can never be silently skipped. |
+
+Tests: 96, all passing locally on Python 3.9 and 3.13 with Postgres; none skipped.
+
+## Deploy (by hand)
+
+1. `git pull` on both machines (after merge).
+2. Supabase SQL editor: run `sql/005_frozen_decisions_fingerprint_notify_purge.sql`.
+3. n8n: turn off the current approval workflow, import `n8n/telegram_approval_webhook.json`, reconnect
+   Telegram, Supabase (three HTTP nodes now: Decide, Get Finance Payload, Mark Finance Notified) and Gmail,
+   set the Supabase URL in those three nodes and the finance address. Activate.
+4. Test: `python run_demo.py`, approve, check the email; tap Approve again (refused).
+5. Optional failure test: temporarily break the finance address, approve a fresh run, confirm the
+   Telegram alert appears, fix the address, tap Resend, then tap Resend again (refused: already emailed).
+
+## Still open
+
+- Rule versions are not part of the fingerprint yet (add when a second rule set exists).
+- Per-invoice approve/deny and the finance CSV are the next feature session.
+- The scan is keyword-based. It errs toward holding a run; tune the patterns with the first real contracts.

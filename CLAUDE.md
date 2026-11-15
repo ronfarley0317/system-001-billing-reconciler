@@ -21,6 +21,10 @@ LLMs are strictly confined to language extraction (parsing unstructured PDFs int
 * Approved and denied findings are immutable. A rerun must never change them.
 * Only `UNDERBILLED` periods whose evidence passes `agents/findings.py` may be `PENDING_APPROVAL`. Over-billing, credits, mixed signs, missing invoices and unverified terms are `REVIEW_REQUIRED`. Never net over-billing against under-billing.
 * A monthly minimum applies once per customer per billing month, across all of that month's invoices.
+* Coverage is fail-closed: `agents/coverage.py` scans the contract for pricing the engine does not model, and the model's `other_pricing_terms` list; any hit holds every finding for review. The model may only block, never approve.
+* Client ids are permanent: read from `clients/<folder>/client.json` (created on first run). Never derive a client id from a company name for a real client.
+* Decided findings are frozen whole (sql/005). Approvals are checked against the card's SHA-256 fingerprint. Deletes happen only through `purge_client`.
+* The finance email is recorded with `mark_finance_notified`; a failed email is resent only through `finance_payload` (the Resend button), never by re-approving.
 * Pass Decimal values as strings to preserve `NUMERIC` accuracy.
 * Tests run with `python -m unittest discover tests` and need no Ollama, Supabase or Telegram. Add a test with every change to the math, the gate or the ledger.
 

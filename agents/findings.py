@@ -9,10 +9,12 @@ written as REVIEW_REQUIRED with the reasons, and never counts toward a claim.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from agents.coverage import unsupported_pricing
 from agents.analyst import (
     LEAK_ESCALATOR, LEAK_FLOOR, LEAK_OTHER, LEAK_PROMO, NEEDS_REVIEW, OVERBILLED, UNDERBILLED,
     ZERO, ZERO_VARIANCE, AuditReport, PeriodAudit,
@@ -23,6 +25,10 @@ from schemas.payloads import ExtractedContractTerms
 PENDING_APPROVAL = "PENDING_APPROVAL"
 REVIEW_REQUIRED = "REVIEW_REQUIRED"
 MISSING_INVOICE = "MISSING_INVOICE"
+
+# Clauses the model may mention that do not change the recurring amount billed.
+_PAYMENT_TERMS = re.compile(r"\blate\b|\binterest\b|\btax(?:es)?\b|\bnet \w+|\bpayment (?:is )?due\b|\boverdue\b",
+                            re.IGNORECASE)
 
 # Escalators above this are almost always a misread (5.0 read as 50.0). A person confirms.
 ESCALATOR_SANITY_PCT = Decimal("25")
@@ -55,10 +61,17 @@ class Finding:
         return self.status == PENDING_APPROVAL
 
 
-def term_problems(scout: ScoutResult) -> list[str]:
+def term_problems(scout: ScoutResult, contract_text: str | None = None) -> list[str]:
     """Problems with the extracted terms as a whole. Any of these blocks every finding."""
     t = scout.terms
     problems: list[str] = []
+    if contract_text is not None:
+        problems += [str(flag) for flag in unsupported_pricing(contract_text)]
+    for phrase in t.other_pricing_terms:
+        if _PAYMENT_TERMS.search(phrase):
+            continue  # due dates, late charges, interest and taxes do not change the recurring price
+        # The model can only block here, never approve: listing a clause sends the run to a person.
+        problems.append(f"model reported another pricing term: \"{phrase}\"; needs a person")
     if (t.promo_rate is None) != (t.promo_expiration_date is None):
         problems.append("promo rate and promo end date must both be present or both absent")
     if (t.annual_escalator_pct is None) != (t.escalator_effective_date is None):
@@ -165,9 +178,13 @@ def describe(period: PeriodAudit, terms: ExtractedContractTerms) -> str:
     return text
 
 
-def build_findings(report: AuditReport, scout: ScoutResult) -> list[Finding]:
-    """One finding per billing period with a variance, plus one per missing month."""
-    global_problems = term_problems(scout)
+def build_findings(report: AuditReport, scout: ScoutResult, contract_text: str | None = None) -> list[Finding]:
+    """One finding per billing period with a variance, plus one per missing month.
+
+    Pass the contract text whenever it is available: it is scanned for pricing language
+    the engine does not model, and any hit holds every finding for review.
+    """
+    global_problems = term_problems(scout, contract_text)
     findings: list[Finding] = []
 
     for period in report.periods:

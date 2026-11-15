@@ -34,6 +34,7 @@ load_dotenv(ROOT / ".env")
 from agents.analyst import AuditReport, reconcile_rows  # noqa: E402
 from agents.findings import Finding, approvable_view, build_findings  # noqa: E402
 from agents.scout import ScoutResult, extract_terms  # noqa: E402
+from tools.client_config import load_or_create_client_id  # noqa: E402
 from tools.db_client import OpenedRun, client_slug, record_audit  # noqa: E402
 from tools.notifier import send_hitl_dossier  # noqa: E402
 from tools.documents import CONTRACT_SUFFIXES, DocumentError, read_document  # noqa: E402
@@ -58,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Reconcile one contract against one invoice export. With no inputs, runs the demo data.",
     )
+    parser.add_argument("--client-id", help="permanent ledger id when using --contract/--invoices instead of --client")
     parser.add_argument("--client", help=f"folder name under {CLIENTS_DIR.name}/ holding the contract and the invoice export")
     parser.add_argument("--contract", type=Path, help="path to the contract (PDF, Word .docx, text or Markdown)")
     parser.add_argument("--invoices", type=Path, help="path to the invoice export (CSV or Excel .xlsx)")
@@ -496,7 +498,7 @@ def main() -> int:
         report = reconcile_rows(scout.terms, intake.rows)
     render_audit(report)
 
-    findings = build_findings(report, scout)
+    findings = build_findings(report, scout, contract_text)
     render_review(findings)
     review_count = sum(not f.approvable for f in findings)
 
@@ -504,11 +506,22 @@ def main() -> int:
         render_hitl(report, scout)
         return 0
 
-    # The demo gets a fresh client id each run, so its findings never collide with a real client's.
+    # A client's id is permanent and stored in their folder; the demo gets a fresh one each run.
     contract = contract_id(CONTRACT)
-    client_id = client_slug(args.client) if args.client else (
-        client_slug(report.periods[0].customer_name) if inputs is not None
-        else f"demo-{datetime.now():%Y%m%d-%H%M%S}")
+    if args.client:
+        client_id, created = load_or_create_client_id(CLIENTS_DIR / args.client)
+        if created:
+            console.print(f"[yellow]New client id[/] [bold]{client_id}[/] saved to "
+                          f"{display_path(CLIENTS_DIR / args.client / 'client.json')}. Keep that file with their contract.")
+    elif inputs is not None:
+        if not args.client_id:
+            console.print(Panel("[bold red]✘ A real contract needs a permanent client id.[/]\n"
+                                "[grey70]Use --client <folder> (the id is created and saved for you), "
+                                "or pass --client-id.[/]", border_style="red"))
+            return 1
+        client_id = client_slug(args.client_id)
+    else:
+        client_id = f"demo-{datetime.now():%Y%m%d-%H%M%S}"
 
     # Ledger first: no approval request goes out for findings that were never recorded.
     ledger = write_ledger(findings, client_id, contract)
