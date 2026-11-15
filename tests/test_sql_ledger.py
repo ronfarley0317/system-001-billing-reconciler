@@ -22,7 +22,11 @@ def _pg_bin() -> str | None:
     found = shutil.which("initdb")
     if found:
         return str(Path(found).parent)
-    candidates = sorted(glob.glob("/usr/lib/postgresql/*/bin/initdb"))
+    patterns = ("/usr/lib/postgresql/*/bin/initdb",              # Debian / Ubuntu
+                "/opt/homebrew/opt/postgresql@*/bin/initdb",      # Homebrew on Apple silicon (keg-only)
+                "/usr/local/opt/postgresql@*/bin/initdb",         # Homebrew on Intel Macs
+                "/Applications/Postgres.app/Contents/Versions/*/bin/initdb")
+    candidates = sorted(c for pattern in patterns for c in glob.glob(pattern))
     return str(Path(candidates[-1]).parent) if candidates else None
 
 
